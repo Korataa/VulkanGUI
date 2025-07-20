@@ -1,0 +1,166 @@
+# Protocol-Based Component Systems (PBCS)
+
+## Overview
+This document describes two approaches to component-based architecture in Swift:
+1. Simple Protocol-Based Component System
+2. Optimized Protocol-Based Component System with Cache-Friendly Storage
+
+## Simple PBCS
+A straightforward approach using Swift protocols for composition.
+
+### Core Components
+```swift
+public protocol GameObject {
+    var id: UUID { get }
+    var name: String? { get set }
+}
+
+public protocol Renderable: GameObject {
+    var mesh: Mesh { get }
+    var material: Material? { get }
+}
+
+public protocol Physics: GameObject {
+    var velocity: Vector3 { get set }
+    var mass: Float { get }
+}
+
+public protocol Animated: GameObject {
+    var currentAnimation: AnimationClip? { get set }
+    var animationTime: Float { get set }
+}
+```
+
+### Example Entity
+```swift
+public struct Monster: GameObject, Renderable, Combat {
+    public let id = UUID()
+    public var name: String?
+    public var mesh: Mesh
+    public var material: Material?
+    public var health: Float
+    public var damage: Float
+}
+```
+
+### Simple Systems
+```swift
+public final class RenderSystem {
+    func update(gameObjects: [any GameObject]) {
+        for case let obj as Renderable in gameObjects {
+            // Render the object
+        }
+    }
+}
+```
+
+## Optimized PBCS
+A high-performance variant that maintains a simple API but uses optimized storage internally.
+
+### Component Definition
+```swift
+public protocol ComponentDefinition {
+    associatedtype Storage
+    associatedtype Data
+    
+    static func createStorage() -> Storage
+    static func extractData<T: GameObject>(from entity: T) -> Data?
+}
+```
+
+### Example Component Implementation
+```swift
+public struct RenderableComponent: ComponentDefinition {
+    struct Storage {
+        var meshes: [UUID: Mesh]
+        var materials: [UUID: Material]
+        var batchedByMaterial: [Material: [UUID]]
+    }
+    
+    struct Data {
+        let mesh: Mesh
+        let material: Material
+    }
+    
+    static func createStorage() -> Storage {
+        Storage(meshes: [:], materials: [:], batchedByMaterial: [:])
+    }
+    
+    static func extractData<T: GameObject>(from entity: T) -> Data? {
+        guard let renderable = entity as? Renderable else { return nil }
+        return Data(mesh: renderable.mesh, material: renderable.material)
+    }
+}
+```
+
+### System Manager
+```swift
+public final class SystemManager {
+    private var componentStorages: [ObjectIdentifier: Any] = [:]
+    private var updateHandlers: [ObjectIdentifier: (Any) -> Void] = [:]
+    
+    public func register<T: ComponentDefinition>(_ component: T.Type, 
+                                               update: @escaping (T.Storage) -> Void) {
+        let id = ObjectIdentifier(T.self)
+        componentStorages[id] = T.createStorage()
+        updateHandlers[id] = { storage in
+            update(storage as! T.Storage)
+        }
+    }
+}
+```
+
+## Comparison
+
+### Simple PBCS Benefits
+- Easy to understand and implement
+- Natural Swift protocol composition
+- Clear type relationships
+- Faster development time
+
+### Optimized PBCS Benefits
+- Better performance through data locality
+- Cache-friendly memory layout
+- SIMD-friendly processing
+- Maintains simple API
+
+### Trade-offs
+- Optimized version has more complex implementation
+- More boilerplate in optimized version
+- Simple version has worse cache coherency
+- Optimized version requires more careful management of component storage
+
+## Example Game Usage
+```swift
+// Game setup with optimized PBCS
+public final class Game {
+    private let systems = SystemManager()
+    
+    init() {
+        systems.register(RenderableComponent.self) { storage in
+            // Efficient batch rendering
+            for (material, entities) in storage.batchedByMaterial {
+                // Render all entities with same material
+            }
+        }
+    }
+    
+    func spawnMonster() {
+        let monster = Monster(
+            id: UUID(),
+            name: "Goblin",
+            mesh: goblinMesh,
+            material: goblinMaterial,
+            health: 100,
+            damage: 10
+        )
+        systems.spawn(monster)
+    }
+}
+```
+
+## Notes
+- The optimized version requires more setup but provides better runtime performance
+- Simple version is good for prototyping or smaller games
+- Consider starting with simple PBCS and moving to optimized if needed
+- Both approaches maintain Swift's type safety and protocol-oriented design

@@ -1,0 +1,4 @@
+module Cgltf {
+    header "cgltf.h"
+    export *
+}

@@ -1,0 +1,4 @@
+module Cvma {
+    header "vk_mem_alloc.h"
+    export *
+}
