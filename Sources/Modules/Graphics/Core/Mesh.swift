@@ -4,9 +4,8 @@ import Cvulkan
 
 import Foundation
 
-//TODO: MAKE THIS MOVE ONLY
-
 //Doesnt need to conform to resource because Mesh doesnt own any gpu resources directly
+//Lightweight metadata - can be shared between multiple models
 public class Mesh {
     public var name: String?
 
@@ -20,12 +19,15 @@ public class Mesh {
 
     var primitiveType: PrimitiveType
     
+    // Material ID for this mesh
+    public var materialID: UInt32
+    
     // Axis-aligned bounding box for the mesh
     public var bounds: BoundingBox
 
     init(
         vertexOffset: Int, vertexCount: Int, indexCount: Int, indexOffset: Int, 
-        vertexStride: Int, primitiveType: PrimitiveType, bounds: BoundingBox
+        vertexStride: Int, primitiveType: PrimitiveType, materialID: UInt32, bounds: BoundingBox
     ) {
         self.vertexOffset = vertexOffset
         self.vertexCount = vertexCount
@@ -33,6 +35,7 @@ public class Mesh {
         self.indexOffset = indexOffset
         self.vertexStride = vertexStride
         self.primitiveType = primitiveType
+        self.materialID = materialID
         self.bounds = bounds
     }
 

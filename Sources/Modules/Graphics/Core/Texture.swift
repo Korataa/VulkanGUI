@@ -1,7 +1,8 @@
 import Foundation
 import Cstb_image
 
-public class Texture: Resource {
+//Have to explicitly define ~Copyable because swift sucks (jk but pretty sure this is a compiler bug)
+public struct Texture: ~Copyable, Resource {
     public var name: String?
     private var _id: Int?
     public var id: Int? {

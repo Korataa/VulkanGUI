@@ -3,7 +3,6 @@ import Cvma
 
 import Foundation
 
-//This is a class to avoid ~Copyable limitations, otherwise id make it a move only type
 public struct VulkanBuffer: GPUBuffer {
     public var resourceType: GraphicsResourceType {
         get { return .buffer(usage) }

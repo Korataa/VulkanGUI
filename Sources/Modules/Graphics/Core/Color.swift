@@ -19,6 +19,7 @@ public struct Color: Hashable {
         hasher.combine(r)
         hasher.combine(g)
         hasher.combine(b)
+        hasher.combine(a)
     }
 
     init(_ r: Float, _ g: Float, _ b: Float, _ a: Float) {
@@ -36,6 +37,7 @@ public struct Color: Hashable {
         self.linearR = sRGBToLinear(r)
         self.linearG = sRGBToLinear(g)
         self.linearB = sRGBToLinear(b)
+        self.linearA = a / 255.0
     }
 
     public mutating func setColor(_ r: Float, _ g: Float, _ b: Float, _ a: Float) {

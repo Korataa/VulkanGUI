@@ -30,6 +30,7 @@ class VulkanRenderer {
     var windowHandle: OpaquePointer? = nil
 
     private weak var resourceManager: ResourceManager? = nil
+    var camera: Camera! // Add camera
 
     var instance: VkInstance? = nil
     var surface: VkSurfaceKHR? = nil
@@ -79,12 +80,23 @@ class VulkanRenderer {
     //uniform buffer shit
     var frameUBO: VkBuffer? = nil
     var frameUBOMemory: VmaAllocation? = nil
+    
+    // New separate UBOs
+    var transformUBO: VkBuffer? = nil
+    var transformUBOMemory: VmaAllocation? = nil
+    var materialUBO: VkBuffer? = nil
+    var materialUBOMemory: VmaAllocation? = nil
+    
+    // Legacy UBO - keep for compatibility
     var objectUBO: VkBuffer? = nil
     var objectUBOMemory: VmaAllocation? = nil
     var lightUBO: VkBuffer? = nil
     var lightUBOMemory: VmaAllocation? = nil
+    
     //alignment stuff for ubo
     var dynamicAlignment: VkDeviceSize = 0
+    var transformAlignment: VkDeviceSize = 0
+    var materialAlignment: VkDeviceSize = 0
 
 
     //Descriptor sets
@@ -92,9 +104,18 @@ class VulkanRenderer {
     var frameDescriptorSet: VkDescriptorSet? = nil
     var objectDescriptorSet: VkDescriptorSet? = nil
     var lightDescriptorSet: VkDescriptorSet? = nil
+    
+    // New separate descriptor sets
+    var transformDescriptorSet: VkDescriptorSet? = nil
+    var materialDescriptorSet: VkDescriptorSet? = nil
+    
     var frameSetLayout: VkDescriptorSetLayout? = nil
     var objectSetLayout: VkDescriptorSetLayout? = nil
     var lightSetLayout: VkDescriptorSetLayout? = nil
+    
+    // New separate layouts
+    var transformSetLayout: VkDescriptorSetLayout? = nil
+    var materialSetLayout: VkDescriptorSetLayout? = nil
 
     private var portabilityCString = createUnsafeString("VK_KHR_portability_enumeration")
     private var debugUtilCString = createUnsafeString("VK_EXT_debug_utils")
@@ -1104,15 +1125,17 @@ same here 0       1
     }
 
     func createDescriptorSet() {
+        // Set 0: Frame data (camera, lighting)
         var frameBindings = VkDescriptorSetLayoutBinding(
             binding: 0,
             descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             descriptorCount: 1,
             stageFlags: UInt32(VK_SHADER_STAGE_VERTEX_BIT.rawValue | VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
-            pImmutableSamplers: nil         
+            pImmutableSamplers: nil
         )
     
-        var objectBindings = VkDescriptorSetLayoutBinding(
+        // Set 1: Transform data (per model)
+        var transformBindings = VkDescriptorSetLayoutBinding(
             binding: 0,
             descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
             descriptorCount: 1,
@@ -1120,10 +1143,10 @@ same here 0       1
             pImmutableSamplers: nil
         )
     
-        // Fix: Add missing comma after descriptorCount
-        var lightBindings = VkDescriptorSetLayoutBinding(
-            binding: 1,
-            descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        // Set 2: Material data (per mesh)
+        var materialBindings = VkDescriptorSetLayoutBinding(
+            binding: 0,
+            descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
             descriptorCount: 1,
             stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
             pImmutableSamplers: nil
@@ -1142,37 +1165,37 @@ same here 0       1
             fatalError("failed to create frame descriptor set layout!")
         }
     
-        // Create object layout
-        var objectLayoutInfo = VkDescriptorSetLayoutCreateInfo()
-        objectLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-        objectLayoutInfo.bindingCount = 1
-        withUnsafePointer(to: &objectBindings) { ptr in
-            objectLayoutInfo.pBindings = ptr
+        // Create transform layout
+        var transformLayoutInfo = VkDescriptorSetLayoutCreateInfo()
+        transformLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        transformLayoutInfo.bindingCount = 1
+        withUnsafePointer(to: &transformBindings) { ptr in
+            transformLayoutInfo.pBindings = ptr
         }
     
-        let objectLayoutResult = vkCreateDescriptorSetLayout(logicalDevice, &objectLayoutInfo, nil, &objectSetLayout)
-        if objectLayoutResult != VK_SUCCESS {
-            fatalError("Failed to create object descriptor set layout")
+        let transformLayoutResult = vkCreateDescriptorSetLayout(logicalDevice, &transformLayoutInfo, nil, &transformSetLayout)
+        if transformLayoutResult != VK_SUCCESS {
+            fatalError("Failed to create transform descriptor set layout")
         }
     
-        // Create lighting layout
-        var lightLayoutInfo = VkDescriptorSetLayoutCreateInfo()
-        lightLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-        lightLayoutInfo.bindingCount = 1
-        withUnsafePointer(to: &lightBindings) { ptr in
-            lightLayoutInfo.pBindings = ptr
+        // Create material layout
+        var materialLayoutInfo = VkDescriptorSetLayoutCreateInfo()
+        materialLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        materialLayoutInfo.bindingCount = 1
+        withUnsafePointer(to: &materialBindings) { ptr in
+            materialLayoutInfo.pBindings = ptr
         }
     
-        let lightLayoutResult = vkCreateDescriptorSetLayout(logicalDevice, &lightLayoutInfo, nil, &lightSetLayout)
-        if lightLayoutResult != VK_SUCCESS {
-            fatalError("Failed to create lighting descriptor set layout")
+        let materialLayoutResult = vkCreateDescriptorSetLayout(logicalDevice, &materialLayoutInfo, nil, &materialSetLayout)
+        if materialLayoutResult != VK_SUCCESS {
+            fatalError("Failed to create material descriptor set layout")
         }
     
         // Create descriptor pool
         let poolSizes = DynamicArray<VkDescriptorPoolSize>(
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1),  // for frame data
-            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1), // for object data
-            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1) // for lighting
+            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1), // for transform data
+            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1) // for material data
         )
     
         var poolInfo = VkDescriptorPoolCreateInfo()
@@ -1184,7 +1207,7 @@ same here 0       1
         vkCreateDescriptorPool(logicalDevice, &poolInfo, nil, &descriptorPool)
     
         // Allocate descriptor sets
-        let layouts = DynamicArray<VkDescriptorSetLayout?>(frameSetLayout!, objectSetLayout!, lightSetLayout!)
+        let layouts = DynamicArray<VkDescriptorSetLayout?>(frameSetLayout!, transformSetLayout!, materialSetLayout!)
     
         var allocInfo = VkDescriptorSetAllocateInfo()
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
@@ -1196,10 +1219,10 @@ same here 0       1
         vkAllocateDescriptorSets(logicalDevice, &allocInfo, sets.getData())
     
         frameDescriptorSet = sets[0]
-        objectDescriptorSet = sets[1]
-        let lightDescriptorSet = sets[2] // Allocate light descriptor set
+        transformDescriptorSet = sets[1]
+        materialDescriptorSet = sets[2]
     
-        // Update descriptor sets
+        // Update frame descriptor set
         var frameDescriptorWrite = VkWriteDescriptorSet()
         frameDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
         frameDescriptorWrite.dstSet = frameDescriptorSet!
@@ -1218,23 +1241,43 @@ same here 0       1
     
         vkUpdateDescriptorSets(logicalDevice, 1, &frameDescriptorWrite, 0, nil)
     
-        var lightDescriptorWrite = VkWriteDescriptorSet()
-        lightDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-        lightDescriptorWrite.dstSet = lightDescriptorSet!
-        lightDescriptorWrite.dstBinding = 1
-        lightDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-        lightDescriptorWrite.descriptorCount = 1
+        // Update transform descriptor set
+        var transformDescriptorWrite = VkWriteDescriptorSet()
+        transformDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+        transformDescriptorWrite.dstSet = transformDescriptorSet!
+        transformDescriptorWrite.dstBinding = 0
+        transformDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+        transformDescriptorWrite.descriptorCount = 1
     
-        var lightBufferInfo = VkDescriptorBufferInfo(
-            buffer: frameUBO, // Replace with your lighting UBO buffer
+        var transformBufferInfo = VkDescriptorBufferInfo(
+            buffer: transformUBO,
             offset: 0,
-            range: VkDeviceSize(MemoryLayout<FrameConstants>.stride)
+            range: VkDeviceSize(MemoryLayout<TransformConstants>.stride)
         )
-        withUnsafePointer(to: &lightBufferInfo) { ptr in
-            lightDescriptorWrite.pBufferInfo = ptr
+        withUnsafePointer(to: &transformBufferInfo) { ptr in
+            transformDescriptorWrite.pBufferInfo = ptr
         }
     
-        vkUpdateDescriptorSets(logicalDevice, 1, &lightDescriptorWrite, 0, nil)
+        vkUpdateDescriptorSets(logicalDevice, 1, &transformDescriptorWrite, 0, nil)
+    
+        // Update material descriptor set
+        var materialDescriptorWrite = VkWriteDescriptorSet()
+        materialDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+        materialDescriptorWrite.dstSet = materialDescriptorSet!
+        materialDescriptorWrite.dstBinding = 0
+        materialDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+        materialDescriptorWrite.descriptorCount = 1
+    
+        var materialBufferInfo = VkDescriptorBufferInfo(
+            buffer: materialUBO,
+            offset: 0,
+            range: VkDeviceSize(MemoryLayout<MaterialConstants>.stride)
+        )
+        withUnsafePointer(to: &materialBufferInfo) { ptr in
+            materialDescriptorWrite.pBufferInfo = ptr
+        }
+    
+        vkUpdateDescriptorSets(logicalDevice, 1, &materialDescriptorWrite, 0, nil)
     }
 
     func createGraphicsPipeline() {
@@ -1377,7 +1420,7 @@ same here 0       1
         //Create descriptor set and layout
         createDescriptorSet()
 
-        let setLayouts = DynamicArray<VkDescriptorSetLayout?>(frameSetLayout!, objectSetLayout!, lightSetLayout!)
+        let setLayouts = DynamicArray<VkDescriptorSetLayout?>(frameSetLayout!, transformSetLayout!, materialSetLayout!)
 
         var pipelineLayoutInfo = VkPipelineLayoutCreateInfo()
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
@@ -1609,8 +1652,8 @@ same here 0       1
 
     //for sending read-only data (like for lighting) to the gpu
     func createUniformBuffer() {
+        // Frame constants (camera, lighting)
         let frameUBOSize = VkDeviceSize(MemoryLayout<FrameConstants>.stride)
-
         createBuffer(
             size: frameUBOSize,
             usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
@@ -1620,16 +1663,28 @@ same here 0       1
             bufferAllocation: &frameUBOMemory
         )
 
-        let objectUBOSize = VkDeviceSize(MemoryLayout<ObjectConstants>.stride * MAX_OBJECTS)
-
+        // Transform constants (per model)
+        let transformUBOSize = VkDeviceSize(MemoryLayout<TransformConstants>.stride * MAX_OBJECTS)
         createBuffer(
-            size: objectUBOSize,
+            size: transformUBOSize,
             usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
             properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) |
                         UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
             isDynamic: true,
-            buffer: &objectUBO,
-            bufferAllocation: &objectUBOMemory
+            buffer: &transformUBO,
+            bufferAllocation: &transformUBOMemory
+        )
+
+        // Material constants (per mesh)
+        let materialUBOSize = VkDeviceSize(MemoryLayout<MaterialConstants>.stride * MAX_MATERIALS)
+        createBuffer(
+            size: materialUBOSize,
+            usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
+            properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) |
+                        UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
+            isDynamic: true,
+            buffer: &materialUBO,
+            bufferAllocation: &materialUBOMemory
         )
     }
 
@@ -1674,13 +1729,18 @@ same here 0       1
         var properties = VkPhysicalDeviceProperties()
         vkGetPhysicalDeviceProperties(physicalDevice, &properties)
 
-        let rawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<ObjectConstants>.size)
         let minAlignment = properties.limits.minUniformBufferOffsetAlignment
 
-        //round up to nearest multiple of minAlignment
-        dynamicAlignment = (rawSize + minAlignment - 1) & ~(minAlignment - 1)
+        // Calculate alignment for transform UBO
+        let transformRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<TransformConstants>.size)
+        transformAlignment = (transformRawSize + minAlignment - 1) & ~(minAlignment - 1)
 
-        print("Each object UBO entry uses \(dynamicAlignment) bytes")
+        // Calculate alignment for material UBO  
+        let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants>.size)
+        materialAlignment = (materialRawSize + minAlignment - 1) & ~(minAlignment - 1)
+
+        print("Transform UBO entry uses \(transformAlignment) bytes")
+        print("Material UBO entry uses \(materialAlignment) bytes")
     }
 
     func updateObjectUBO(at offset: Int, transform: Transform, materialID: UInt32) {
@@ -1701,6 +1761,42 @@ same here 0       1
         memcpy(destPtr, &constants, MemoryLayout<ObjectConstants>.size)
 
         vmaUnmapMemory(vmaAllocator!, objectUBOMemory!)
+    }
+
+    func updateTransformUBO(at offset: Int, transform: Transform) {
+        var constants = TransformConstants(
+            modelMatrix: transform.modelMatrix,
+            normalMatrix: transform.normalMatrix
+        )
+
+        var dataPtr: UnsafeMutableRawPointer?
+        let result = vmaMapMemory(vmaAllocator!, transformUBOMemory!, &dataPtr)
+        if result != VK_SUCCESS {
+            fatalError("Failed to map transform UBO memory!")
+        }
+
+        let destPtr = dataPtr!.advanced(by: offset)
+        memcpy(destPtr, &constants, MemoryLayout<TransformConstants>.size)
+
+        vmaUnmapMemory(vmaAllocator!, transformUBOMemory!)
+    }
+
+    func updateMaterialUBO(at offset: Int, materialID: UInt32) {
+        var constants = MaterialConstants(
+            materialID: materialID
+            // Other material properties will be set to defaults from struct definition
+        )
+
+        var dataPtr: UnsafeMutableRawPointer?
+        let result = vmaMapMemory(vmaAllocator!, materialUBOMemory!, &dataPtr)
+        if result != VK_SUCCESS {
+            fatalError("Failed to map material UBO memory!")
+        }
+
+        let destPtr = dataPtr!.advanced(by: offset)
+        memcpy(destPtr, &constants, MemoryLayout<MaterialConstants>.size)
+
+        vmaUnmapMemory(vmaAllocator!, materialUBOMemory!)
     }
 
     private func calculateViewFrustum(projectionMatrix: Matrix4x4, viewMatrix: Matrix4x4) -> Frustum {
@@ -1779,11 +1875,16 @@ same here 0       1
         //Calculate the view frustum for culling
         let frustum = calculateViewFrustum(projectionMatrix: camera.projectionMatrix, viewMatrix: camera.viewMatrix)
 
-        let sortedModels = models.sorted { $0.materialID < $1.materialID }
+        // Sort models by their first mesh's material ID for better batching
+        let sortedModels = models.sorted { 
+            ($0.meshes.first?.materialID ?? 0) < ($1.meshes.first?.materialID ?? 0) 
+        }
 
         //for static meshes
         var currentMaterialID: UInt32 = UInt32.max
-        for model in models where !model.isDynamic && model.isVisible(in: frustum) {
+        var currentTransformIndex: Int = 0
+        
+        for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
             var vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
             var offsets = DynamicArray<VkDeviceSize>(0)
@@ -1792,17 +1893,43 @@ same here 0       1
             //bind index buffer
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
 
-            //draw the model
+            // Update transform UBO once per model
+            let transformOffset = currentTransformIndex * Int(transformAlignment)
+            updateTransformUBO(at: transformOffset, transform: model.transform)
+            
+            // Bind transform descriptor set with dynamic offset
+            var transformOffsetValue = UInt32(transformOffset)
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipelineLayout,
+                1, // Set 1: transforms
+                1, &transformDescriptorSet,
+                1, &transformOffsetValue
+            )
+
+            //draw the model - each mesh can have different materials
             for mesh in model.meshes {
                 //update material state only if it changed
                 if currentMaterialID != mesh.materialID {
                     currentMaterialID = mesh.materialID
-                    //TODO: Here you would bind the materials descriptor set
+                    
+                    // Update material UBO
+                    let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
+                    updateMaterialUBO(at: materialOffset, materialID: mesh.materialID)
+                    
+                    // Bind material descriptor set with dynamic offset
+                    var materialOffsetValue = UInt32(materialOffset)
+                    vkCmdBindDescriptorSets(
+                        commandBuffer,
+                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipelineLayout,
+                        2, // Set 2: materials
+                        1, &materialDescriptorSet,
+                        1, &materialOffsetValue
+                    )
                 }
 
-                //update object UBO (transform, material)
-                updateObjectUBO(at: currentFrame * Int(dynamicAlignment), transform: mesh.transform, materialID: mesh.materialID)
-            
                 //Draw
                 vkCmdDrawIndexed(
                     commandBuffer!,
@@ -1813,6 +1940,8 @@ same here 0       1
                     0                           // First instance
                 )
             }
+            
+            currentTransformIndex += 1
         }
 
         //Reset material tracking for dynamic objects
@@ -1830,16 +1959,42 @@ same here 0       1
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
             }
 
-            // rest if same as static meshes
+            // Update transform UBO once per model
+            let transformOffset = currentTransformIndex * Int(transformAlignment)
+            updateTransformUBO(at: transformOffset, transform: model.transform)
+            
+            // Bind transform descriptor set with dynamic offset
+            var transformOffsetValue = UInt32(transformOffset)
+            vkCmdBindDescriptorSets(
+                commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipelineLayout,
+                1, // Set 1: transforms
+                1, &transformDescriptorSet,
+                1, &transformOffsetValue
+            )
+
+            // draw all meshes for this model - each mesh can have different materials
             for mesh in model.meshes {
                 //update material state only if it changed
                 if currentMaterialID != mesh.materialID {
                     currentMaterialID = mesh.materialID
-                    //TODO: Here you would bind the materials descriptor set
+                    
+                    // Update material UBO
+                    let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
+                    updateMaterialUBO(at: materialOffset, materialID: mesh.materialID)
+                    
+                    // Bind material descriptor set with dynamic offset
+                    var materialOffsetValue = UInt32(materialOffset)
+                    vkCmdBindDescriptorSets(
+                        commandBuffer,
+                        VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        pipelineLayout,
+                        2, // Set 2: materials
+                        1, &materialDescriptorSet,
+                        1, &materialOffsetValue
+                    )
                 }
-
-                //update object UBO (transform, material)
-                updateObjectUBO(at: currentFrame * Int(dynamicAlignment), transform: mesh.transform, materialID: mesh.materialID)
 
                 //Draw
                 vkCmdDrawIndexed(
@@ -1851,11 +2006,9 @@ same here 0       1
                     0                           // First instance
                 )
             }
+            
+            currentTransformIndex += 1
         }
-
-        //use buffers for rendering
-        vkCmdBindVertexBuffers(...)
-        vkCmdBindIndexBuffers(...)
     }
 
     func recordCommandBuffer(commandBuffer: VkCommandBuffer, imageIndex: UInt32) {
@@ -1999,12 +2152,8 @@ same here 0       1
         //only reset the fence if we are submitting work to it
         vkResetFences(logicalDevice, 1, &inFlightFences![currentFrame])
 
-        // 🔥 UPDATE THE UBO HERE (before recording the command buffer)
-        for (index, object) in models.enumerated() {
-            if index >= MAX_OBJECTS { break } //safety check
-            let offset = Int(index) * Int(dynamicAlignment)
-            updateObjectUBO(at: offset, transform: object.transform, materialID: object.materialID)
-        }
+        // Note: UBO updates are now handled per-mesh in the render() function
+        // since each mesh can have a different material
 
         vkResetCommandBuffer(commandBuffer, 0)
         recordCommandBuffer(commandBuffer: commandBuffer!,imageIndex: imageIndex)
