@@ -4,7 +4,7 @@ public class Graphics {
 
     var graphicsResourceManager: GraphicsResourceManager
 
-    var pipelines: [GraphicsPipeline] = []
+    var pipelines: [any GraphicsPipeline] = []
     var renderModels: [Model] = []        //Models to render
 
     public init(sdlContext: SDLContext) {
@@ -29,7 +29,7 @@ public class Graphics {
         renderer.initialize()
     }
 
-    func addPipeline(_ pipeline: GraphicsPipeline) {
+    func addPipeline(_ pipeline: any GraphicsPipeline) {
         pipelines.append(pipeline)
     }
 
@@ -42,7 +42,17 @@ public class Graphics {
 
     //Rendering stuff gets updated in here!!
     public func update() {
-        renderer.renderFrame(models: renderModels)
+        // Begin frame and get swapchain image index
+        guard let imageIndex = renderer.beginFrame() else {
+            // Frame was skipped (swapchain recreation, etc.)
+            return
+        }
+        
+        // Render all models
+        renderer.render(models: renderModels)
+        
+        // End frame and present
+        renderer.endFrame(imageIndex: imageIndex)
     }
 
     ///Everytime model is added to scene this must be called (or the alternative version of this method)
@@ -51,9 +61,9 @@ public class Graphics {
     }
 
     ///Everytime model is added to scene this must be called (or the alternative version of this method)
-    public func addModel(mesh: Mesh, transform: Transform, materialID: UInt32) {
+    public func addModel(mesh: Mesh, transform: Transform) {
         renderModels.append(Model(
-            mesh: mesh, transform: transform, materialID: materialID
+            meshes: [mesh], transform: transform
         ))
     }
 

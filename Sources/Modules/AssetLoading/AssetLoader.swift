@@ -14,15 +14,15 @@ public struct LoadedMesh {
 
 public struct LoadedModel {
     var meshes: [LoadedMesh]
-    var textures: [Texture]
+    var textureStorage: TextureStorage
     var materials: [Material]
     var nodeTransforms: [Matrix4x4]
 }
 
 public class AssetLoader {
-    private let resourceManager: ResourceManager
+    private let resourceManager: GraphicsResourceManager
 
-    public init(resourceManager: ResourceManager) {
+    public init(resourceManager: GraphicsResourceManager) {
         self.resourceManager = resourceManager
     }
 
@@ -54,13 +54,16 @@ public class AssetLoader {
         let dataVal = dataPtr.pointee
 
         // --- 3. Load textures ---
-        var textures: [Texture] = []
+        var textureStorage = TextureStorage()
         for i in 0..<dataVal.images_count {
             let image = dataVal.images[i]
             if let imageData = loadImageData(from: image, basePath: basePath) {
                 let (pixels, width, height, channels) = decodeImage(imageData)
                 let texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
-                textures.append(texture)
+                
+                // Register texture with resource manager and get ID
+                let textureId = resourceManager.addResource(texture)
+                textureStorage.addTextureId(textureId, width: Int(width), height: Int(height), channels: Int(channels))
             }
         }
 
@@ -95,7 +98,8 @@ public class AssetLoader {
 
             let occlusionTex = mat.occlusion_texture
             material.occlusionTextureIndex = occlusionTex.texture - dataVal.textures
-            material.occlusionStrength = occlusionTex.strength
+            // Note: cgltf_texture_view doesn't have strength field, using default
+            material.occlusionStrength = 1.0
 
             materials.append(material)
         }
@@ -108,8 +112,8 @@ public class AssetLoader {
         }
 
         // --- 6. (Finally) load mesh data and upload to buffers ---
-        guard let staticBuffer = resourceManager.staticVertexBuffer,
-              let indexBuffer = resourceManager.indexBuffer else {
+        guard resourceManager.staticVertexBuffer != nil,
+              resourceManager.indexBuffer != nil else {
                 print("Error: Buffers not initialized")
                 return nil
         }
@@ -211,23 +215,51 @@ public class AssetLoader {
                 }
 
                 // --- Upload to buffers and create mesh descriptor ---
-                let vertexOffset = staticBuffer.allocateAndUpload(data: vertices)
-                let indexOffset = indexBuffer.allocateAndUpload(data: indices)
-
-                meshes.append(LoadedMesh(
-                    vertexOffset: vertexOffset,
-                    vertexCount: vertices.count,
-                    indexOffset: indexOffset,
-                    indexCount: indices.count,
-                    materialIndex: prim.material != nil ? Int(prim.material - dataVal.materials) : nil,
-                    bounds: (min: minBounds, max: maxBounds)
-                ))
+                do {
+                    let vertexRegion = try resourceManager.allocateRegion(
+                        type: .staticVertex, 
+                        size: vertices.count * MemoryLayout<Vertex3D>.stride
+                    )
+                    let indexRegion = try resourceManager.allocateRegion(
+                        type: .index, 
+                        size: indices.count * MemoryLayout<UInt32>.stride
+                    )
+                    
+                    // Upload the data
+                    vertices.withUnsafeBytes { vertexBytes in
+                        vertexRegion.buffer.uploadData(
+                            data: vertexBytes.baseAddress!,
+                            size: vertexBytes.count,
+                            offset: vertexRegion.offset
+                        )
+                    }
+                    
+                    indices.withUnsafeBytes { indexBytes in
+                        indexRegion.buffer.uploadData(
+                            data: indexBytes.baseAddress!,
+                            size: indexBytes.count,
+                            offset: indexRegion.offset
+                        )
+                    }
+                
+                    meshes.append(LoadedMesh(
+                        vertexOffset: vertexRegion.offset,
+                        vertexCount: vertices.count,
+                        indexOffset: indexRegion.offset,
+                        indexCount: indices.count,
+                        materialIndex: prim.material != nil ? Int(prim.material - dataVal.materials) : nil,
+                        bounds: (min: minBounds, max: maxBounds)
+                    ))
+                } catch {
+                    print("Error uploading mesh data: \(error)")
+                    return nil
+                }
             }
         }
 
         return LoadedModel(
             meshes: meshes,
-            textures: textures,
+            textureStorage: textureStorage,
             materials: materials,
             nodeTransforms: nodeTransforms
         )
@@ -244,6 +276,7 @@ public class AssetLoader {
             indexOffset: loadedMesh.indexOffset,
             vertexStride: MemoryLayout<Vertex3D>.stride,
             primitiveType: primitiveType,
+            materialID: UInt32(loadedMesh.materialIndex ?? 0),
             bounds: bounds
         )
     }
@@ -253,8 +286,10 @@ public class AssetLoader {
         let meshes = loadedModel.meshes.map { createMesh(from: $0) }
         return Model(
             meshes: meshes,
-            transform: Transform(), // Default transform - can be updated later
-            materialID: 0 // Default material - can be updated later
+            transform: Transform(
+                position: Vector3(0, 0, 0),
+                scale: Vector3(1, 1, 1)
+            )
         )
     }
 

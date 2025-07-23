@@ -29,7 +29,7 @@ class VulkanRenderer {
     var sdlContext: SDLContext
     var windowHandle: OpaquePointer? = nil
 
-    private weak var resourceManager: ResourceManager? = nil
+    private var resourceManager: GraphicsResourceManager? = nil
     var camera: Camera! // Add camera
 
     var instance: VkInstance? = nil
@@ -276,7 +276,7 @@ same here 0       1
         createSyncObjects()
     }
 
-    func setResourceManager(_ resourceManager: ResourceManager) {
+    func setResourceManager(_ resourceManager: GraphicsResourceManager) {
         self.resourceManager = resourceManager
     }
 
@@ -851,7 +851,11 @@ same here 0       1
     func chooseSwapPresentMode(availablePresentModes: inout DynamicArray<VkPresentModeKHR>) -> VkPresentModeKHR {
         for i in 0..<availablePresentModes.getLength() {
             let availablePresentMode = availablePresentModes[i]
-            if vSyncEnabled && availablePresentMode == VK_PRESENT_MODE_FIFO_LATEST_READY_EXT {
+            // Note: VK_PRESENT_MODE_FIFO_LATEST_READY_EXT might not be available in all Vulkan versions
+            // if vSyncEnabled && availablePresentMode == VK_PRESENT_MODE_FIFO_LATEST_READY_EXT {
+            //     return availablePresentMode
+            // }
+            if vSyncEnabled && availablePresentMode == VK_PRESENT_MODE_FIFO_KHR {
                 return availablePresentMode
             }
             if availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR {
@@ -1743,26 +1747,6 @@ same here 0       1
         print("Material UBO entry uses \(materialAlignment) bytes")
     }
 
-    func updateObjectUBO(at offset: Int, transform: Transform, materialID: UInt32) {
-        var constants = ObjectConstants(
-            modelMatrix: transform.modelMatrix,
-            normalMatrix: transform.normalMatrix,
-            materialID: materialID
-        )
-
-        var dataPtr: UnsafeMutableRawPointer?
-        let result = vmaMapMemory(vmaAllocator!, objectUBOMemory!, &dataPtr)
-        if result != VK_SUCCESS {
-            fatalError("Failed to map object UBO memory!")
-        }
-
-        //calculate the destination pointer based on the offset
-        let destPtr = dataPtr!.advanced(by: offset)
-        memcpy(destPtr, &constants, MemoryLayout<ObjectConstants>.size)
-
-        vmaUnmapMemory(vmaAllocator!, objectUBOMemory!)
-    }
-
     func updateTransformUBO(at offset: Int, transform: Transform) {
         var constants = TransformConstants(
             modelMatrix: transform.modelMatrix,
@@ -2011,87 +1995,6 @@ same here 0       1
         }
     }
 
-    func recordCommandBuffer(commandBuffer: VkCommandBuffer, imageIndex: UInt32) {
-        var beginInfo = VkCommandBufferBeginInfo()
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-        beginInfo.flags = 0
-        beginInfo.pInheritanceInfo = nil
-
-        let result = vkBeginCommandBuffer(commandBuffer, &beginInfo)
-        if result != VK_SUCCESS {
-            fatalError("Failed to begin recording command buffer!")
-        }
-
-        var renderPassInfo = VkRenderPassBeginInfo()
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
-        renderPassInfo.renderPass = renderPass
-        renderPassInfo.framebuffer = swapchainFrameBuffers![Int(imageIndex)]
-
-        renderPassInfo.renderArea.offset = VkOffset2D(x: 0, y: 0)
-        renderPassInfo.renderArea.extent = swapchainExtent!
-
-        var clearColor = VkClearValue(color: VkClearColorValue(float32: (0.0 as Float, 0.0 as Float, 0.0 as Float, 1.0 as Float)))
-        renderPassInfo.clearValueCount = 1
-        withUnsafePointer(to: &clearColor) { ptr in
-            renderPassInfo.pClearValues = ptr
-        }
-
-        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE)
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline)
-
-        var vertexBuffers = DynamicArray<VkBuffer?>(vertexBuffer)
-        let offsets = DynamicArray<VkDeviceSize>(0)
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
-
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32)
-
-        var viewport = VkViewport()
-        viewport.x = 0.0
-        viewport.y = 0.0
-        viewport.width = Float(swapchainExtent!.width)
-        viewport.height = Float(swapchainExtent!.height)
-        viewport.minDepth = 0.0
-        viewport.maxDepth = 1.0
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport)
-
-        var scissor = VkRect2D()
-        scissor.offset = VkOffset2D(x: 0, y: 0)
-        scissor.extent = swapchainExtent!
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor)
-
-        //bind frame set (camera and lighting)
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipelineLayout,
-            0, //first set index
-            1, &frameDescriptorSet,
-            0, nil
-        )
-
-        //bind object set (set 1) with dynamic offest (model specific data)
-        var dynamicOffset: UInt32 = 0   //update with the correct offset for the object UBO
-        dynamicOffset = UInt32(currentFrame) * UInt32(dynamicAlignment) //for dynamic UBOs, offset is based on frame index
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipelineLayout,
-            1, //second set index
-            1, &objectDescriptorSet,
-            1, &dynamicOffset //dynamic offset for object UBO
-        )
-
-        vkCmdDrawIndexed(commandBuffer, UInt32(indices.getLength()), 1, 0, 0, 0)
-        vkCmdEndRenderPass(commandBuffer)
-
-        let endCommandBufferResult = vkEndCommandBuffer(commandBuffer)
-        if endCommandBufferResult != VK_SUCCESS {
-            fatalError("Failed to record command buffer!")
-        }
-
-        //print("Recorded command buffer successfully!")
-    }
-
     //Synchronization shit
     func createSyncObjects() {
         imageAvailableSemaphores = DynamicArray<VkSemaphore?>(capacity: UInt32(MAX_FRAMES_IN_FLIGHT))
@@ -2134,30 +2037,78 @@ same here 0       1
         //Vulkan-specific logic to start a frame
     }
 
-    func renderFrame(models: [Model]) {
-        //Vulkan specific draw commands
+    // Frame lifecycle management - called by Graphics class
+    func beginFrame() -> UInt32? {
         vkWaitForFences(logicalDevice, 1, &inFlightFences![currentFrame], VK_TRUE, UInt64.max)
 
         var imageIndex: UInt32 = 0
-        var result = vkAcquireNextImageKHR(logicalDevice, swapchain, UInt64.max,
+        let result = vkAcquireNextImageKHR(logicalDevice, swapchain, UInt64.max,
             imageAvailableSemaphores![currentFrame], nil, &imageIndex)
 
         if result == VK_ERROR_OUT_OF_DATE_KHR {
             recreateSwapchain()
-            return
+            return nil
         } else if result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR {
             fatalError("Failed to acquire swapchain image")
         }
 
-        //only reset the fence if we are submitting work to it
         vkResetFences(logicalDevice, 1, &inFlightFences![currentFrame])
-
-        // Note: UBO updates are now handled per-mesh in the render() function
-        // since each mesh can have a different material
-
         vkResetCommandBuffer(commandBuffer, 0)
-        recordCommandBuffer(commandBuffer: commandBuffer!,imageIndex: imageIndex)
+        
+        // Begin command buffer and render pass
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        vkBeginCommandBuffer(commandBuffer, &beginInfo)
 
+        var renderPassInfo = VkRenderPassBeginInfo()
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
+        renderPassInfo.renderPass = renderPass
+        renderPassInfo.framebuffer = swapchainFrameBuffers![Int(imageIndex)]
+        renderPassInfo.renderArea.offset = VkOffset2D(x: 0, y: 0)
+        renderPassInfo.renderArea.extent = swapchainExtent!
+
+        var clearColor = VkClearValue(color: VkClearColorValue(float32: (0.0, 0.0, 0.0, 1.0)))
+        renderPassInfo.clearValueCount = 1
+        withUnsafePointer(to: &clearColor) { ptr in
+            renderPassInfo.pClearValues = ptr
+        }
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE)
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline)
+
+        // Set viewport and scissor
+        var viewport = VkViewport()
+        viewport.x = 0.0
+        viewport.y = 0.0
+        viewport.width = Float(swapchainExtent!.width)
+        viewport.height = Float(swapchainExtent!.height)
+        viewport.minDepth = 0.0
+        viewport.maxDepth = 1.0
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport)
+
+        var scissor = VkRect2D()
+        scissor.offset = VkOffset2D(x: 0, y: 0)
+        scissor.extent = swapchainExtent!
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor)
+
+        // Bind frame descriptor set (camera and lighting)
+        vkCmdBindDescriptorSets(
+            commandBuffer,
+            VK_PIPELINE_BIND_POINT_GRAPHICS,
+            pipelineLayout,
+            0, // Set 0: frame data
+            1, &frameDescriptorSet,
+            0, nil
+        )
+
+        return imageIndex
+    }
+
+    func endFrame(imageIndex: UInt32) {
+        vkCmdEndRenderPass(commandBuffer)
+        vkEndCommandBuffer(commandBuffer)
+
+        // Submit command buffer
         var submitInfo = VkSubmitInfo()
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
 
@@ -2177,30 +2128,27 @@ same here 0       1
 
         vkQueueSubmit(queueManager!.graphicsQueue, 1, &submitInfo, inFlightFences![currentFrame])
 
+        // Present
         var presentInfo = VkPresentInfoKHR()
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
-
         presentInfo.waitSemaphoreCount = 1
         presentInfo.pWaitSemaphores = signalSemaphores.getDataAsConstPointer()
 
         let swapchains = DynamicArray<VkSwapchainKHR?>(swapchain)
         presentInfo.swapchainCount = 1
         presentInfo.pSwapchains = UnsafePointer(swapchains.getData())
-        withUnsafePointer(to: &imageIndex) { ptr in
+        withUnsafePointer(to: imageIndex) { ptr in
             presentInfo.pImageIndices = ptr
         }
-        
-        presentInfo.pResults = nil
 
-        //TODO:
-        //FIX THIS MAYBE MIGHT BE PRESENTING WITH WRONG QUEUE!
-        result = vkQueuePresentKHR(queueManager!.presentQueue, &presentInfo)
-
+        let result = vkQueuePresentKHR(queueManager!.presentQueue, &presentInfo)
         if result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR {
             recreateSwapchain()
         } else if result != VK_SUCCESS {
             fatalError("failed to present swapchain image!")
         }
+
+        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT
     }
 
     func endFrame() {

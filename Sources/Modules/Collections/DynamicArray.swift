@@ -1,3 +1,5 @@
+import Foundation
+
 public struct DynamicArray<T>: ~Copyable {
     //UnsafeMutablePointer is just a pointer to a block of memory
     private var buffer: UnsafeMutableRawPointer?

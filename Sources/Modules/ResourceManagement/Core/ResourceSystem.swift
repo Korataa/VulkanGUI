@@ -15,7 +15,7 @@ public class ResourceSystem {
     }
     
     // MARK: - Manager Registration
-    public func registerManager<T: ResourceManagerProtocol>(_ manager: T, forType: T.ManagedResource.Type) {
+    public func registerManager<T: ResourceManager>(_ manager: T, forType: T.ManagedResource.Type) {
         managers[String(describing: forType)] = manager
     }
     
@@ -94,7 +94,7 @@ private class AnyResourceManager<T: Resource>: AnyResourceManagerBase {
     private let _getResource: (Int) -> T?
     private let _removeResource: (Int) -> Void
     
-    init<M: ResourceManagerProtocol>(_ manager: M) where M.ManagedResource == T {
+    init<M: ResourceManager>(_ manager: M) where M.ManagedResource == T {
         _addResource = manager.addResource
         _getResource = manager.getResource
         _removeResource = manager.removeResource

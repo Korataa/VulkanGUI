@@ -17,19 +17,19 @@ public class EventManager {
 
         while SDL_PollEvent(&event) {
             switch Int32(event.type) {
-                case SDL_EVENT_QUIT.rawValue:
+                case Int32(SDL_EVENT_QUIT.rawValue):
                     print("pressed close!")
                     shouldQuit = true
 
-                case SDL_EVENT_WINDOW_RESTORED.rawValue:
+                case Int32(SDL_EVENT_WINDOW_RESTORED.rawValue):
                     print("Window has been restored!")
                     sdlContext.setWindowMinimize(minimize: false)
 
-                case SDL_EVENT_WINDOW_MINIMIZED.rawValue:
+                case Int32(SDL_EVENT_WINDOW_MINIMIZED.rawValue):
                     print("Window has been minimized!")
                     sdlContext.setWindowMinimize(minimize: true)
                 
-                case SDL_EVENT_WINDOW_RESIZED.rawValue:
+                case Int32(SDL_EVENT_WINDOW_RESIZED.rawValue):
                     print("Window has been resized!")
                     resizeCallback!()
 
