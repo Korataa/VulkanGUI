@@ -10,14 +10,14 @@ public struct BufferRegion: ~Copyable {
     public let size: Int
     
     /// Reference to the actual GPU buffer this region belongs to
-    public let buffer: VulkanBuffer
+    public let buffer: any GPUBuffer
     
     /// Creates a new buffer region
     /// - Parameters:
     ///   - offset: Byte offset from start of buffer
     ///   - size: Size of region in bytes
     ///   - buffer: The GPU buffer this region belongs to
-    public init(offset: Int, size: Int, buffer: borrowing VulkanBuffer) {
+    public init(offset: Int, size: Int, buffer: any GPUBuffer) {
         self.offset = offset
         self.size = size
         self.buffer = buffer

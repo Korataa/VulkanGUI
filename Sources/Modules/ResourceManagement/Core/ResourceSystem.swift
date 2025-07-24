@@ -9,30 +9,35 @@ public class ResourceSystem {
     private var managers: [String: Any] = [:]  // Store other specialized managers
     
     // MARK: - Initialization
-    public init(vmaAllocator: VmaAllocator) {
-        self.graphicsResourceManager = GraphicsResourceManager(vmaAllocator: vmaAllocator)
+    public init(device: VkDevice, vmaAllocator: VmaAllocator, totalVRAM: UInt64) {
+        self.graphicsResourceManager = GraphicsResourceManager(
+            device: device,
+            vmaAllocator: vmaAllocator, 
+            totalVRAM: totalVRAM
+        )
         try? self.graphicsResourceManager.initialize()
     }
     
     // MARK: - Manager Registration
-    public func registerManager<T: ResourceManager>(_ manager: T, forType: T.ManagedResource.Type) {
+    public func registerManager(_ manager: ResourceManager, forType: Resource.Type) {
         managers[String(describing: forType)] = manager
     }
     
     // MARK: - Resource Management
-    public func addResource(_ resource: Resource) -> Int {
-        // Try to find a specialized manager for this resource type
-        let resourceType = type(of: resource)
-        let managerKey = String(describing: resourceType)
+    public func addResource(_ resource: consuming Resource) -> Int {
+        // Check which manager can handle this resource type
+        let resourceType = resource.resourceType
         
-        if let graphicsResource = resource as? GraphicsResource {
-            return graphicsResourceManager.addResource(graphicsResource)
+        // Try graphics manager first
+        if graphicsResourceManager.canHandle(resourceType) {
+            return graphicsResourceManager.addResource(resource)
         }
         
-        if let manager = managers[managerKey] {
-            // Use type erasure to handle the generic manager
-            if let baseManager = manager as? AnyResourceManager<Resource> {
-                return baseManager.addResource(resource)
+        // Try other registered managers
+        for manager in managers.values {
+            if let resourceManager = manager as? ResourceManager,
+               resourceManager.canHandle(resourceType) {
+                return resourceManager.addResource(resource)
             }
         }
         
@@ -40,79 +45,47 @@ public class ResourceSystem {
     }
     
     public func getResource<T: Resource>(_ id: Int) -> T? {
-        // If requesting a graphics resource, check graphics manager first
-        if T.self is GraphicsResource.Type {
-            return graphicsResources.getResource(id) as? T
+        // Try graphics manager first
+        if let resource = graphicsResourceManager.getResource(id) as? T {
+            return resource
         }
         
-        // Try to find the appropriate manager
-        let managerKey = String(describing: T.self)
-        if let manager = managers[managerKey] as? AnyResourceManager<T> {
-            return manager.getResource(id)
+        // Try other registered managers
+        for manager in managers.values {
+            if let resourceManager = manager as? ResourceManager,
+               let resource = resourceManager.getResource(id) as? T {
+                return resource
+            }
         }
         
         return nil
     }
     
-    public func removeResource(_ id: Int, type: Resource.Type) {
-        // Try graphics resources first
-        if type is GraphicsResource.Type {
-            graphicsResources.removeResource(id)
+    public func removeResource(_ id: Int, resourceType: ResourceType) {
+        // Try graphics manager first
+        if graphicsResourceManager.canHandle(resourceType) {
+            graphicsResourceManager.removeResource(id)
             return
         }
         
-        // Try to find the appropriate manager
-        let managerKey = String(describing: type)
-        if let manager = managers[managerKey] {
-            if let baseManager = manager as? AnyResourceManager<Resource> {
-                baseManager.removeResource(id)
+        // Try other registered managers
+        for manager in managers.values {
+            if let resourceManager = manager as? ResourceManager,
+               resourceManager.canHandle(resourceType) {
+                resourceManager.removeResource(id)
+                return
             }
         }
     }
     
     // MARK: - Cleanup
     public func cleanup() {
-        graphicsResources.cleanup()
+        graphicsResourceManager.cleanup()
         // Clean up all registered managers
         for manager in managers.values {
-            if let baseManager = manager as? AnyResourceManagerBase {
-                baseManager.cleanup()
+            if let resourceManager = manager as? ResourceManager {
+                resourceManager.cleanup()
             }
         }
-    }
-}
-
-// Type erasure for resource managers to handle generic types
-private class AnyResourceManagerBase {
-    func cleanup() {
-        fatalError("Must override")
-    }
-}
-
-private class AnyResourceManager<T: Resource>: AnyResourceManagerBase {
-    private let _addResource: (T) -> Int
-    private let _getResource: (Int) -> T?
-    private let _removeResource: (Int) -> Void
-    
-    init<M: ResourceManager>(_ manager: M) where M.ManagedResource == T {
-        _addResource = manager.addResource
-        _getResource = manager.getResource
-        _removeResource = manager.removeResource
-    }
-    
-    func addResource(_ resource: T) -> Int {
-        _addResource(resource)
-    }
-    
-    func getResource(_ id: Int) -> T? {
-        _getResource(id)
-    }
-    
-    func removeResource(_ id: Int) {
-        _removeResource(id)
-    }
-    
-    override func cleanup() {
-        // Cleanup handled by concrete manager
     }
 }

@@ -1,3 +1,9 @@
+    // Helper to atomically take and nil out a noncopyable property
+    private func take<T>(_ value: inout T?) -> T? {
+        let temp = value
+        value = nil
+        return temp
+    }
 /* 
 This file implements platform-specific rendering logic. Each renderer handles how to set up the 
 graphics API (Vulkan, DirectX, etc.), create command buffers, issue draw calls, etc.
@@ -399,7 +405,7 @@ same here 0       1
         var extensionCount: UInt32 = 0
         vkEnumerateInstanceExtensionProperties(nil, &extensionCount, nil)
 
-        var extensions = DynamicArray<VkExtensionProperties>(repeating: VkExtensionProperties(), count: extensionCount)
+        let extensions = DynamicArray<VkExtensionProperties>(repeating: VkExtensionProperties(), count: extensionCount)
         vkEnumerateInstanceExtensionProperties(nil, &extensionCount, extensions.getData())
 
         print("required extensions count: \(requiredExtensions.getLength())")
@@ -596,7 +602,7 @@ same here 0       1
         //create a temporary queueManager because the main one isnt initialized yet
         //maybe we can optimize this in the future but i doubt its a problem because this occurs during
         //the setup of the vulkan renderer, its not in a loop or anything
-        let tempQueueManager = QueueManager(physicalDevice: physDevice, vulkanSurface: surface!, preferSeperateGraphicsQueue: true)
+        let tempQueueManager = QueueManager(physicalDevice: physDevice, vulkanSurface: surface!, preferSeperateGraphicsQueue: false)
 
         if tempQueueManager.graphicsQueueFamilyIndex != nil {
             score += 500
@@ -676,9 +682,9 @@ same here 0       1
     //LOGICAL DEVICE FUNCTIONS
     func createLogicalDevice() {
         //set up everything in the queue manager
-        queueManager = QueueManager(physicalDevice: physicalDevice!, vulkanSurface: surface!, preferSeperateGraphicsQueue: true)
+        queueManager = QueueManager(physicalDevice: physicalDevice!, vulkanSurface: surface!, preferSeperateGraphicsQueue: false)
 
-        print("Indices.transferFamily is: \(queueManager?.transferQueue)")
+        print("Indices.transferFamily is: \(String(describing: queueManager?.transferQueue))")
 
         var queueCreateInfos: DynamicArray<VkDeviceQueueCreateInfo> = 
             DynamicArray<VkDeviceQueueCreateInfo>()
@@ -766,9 +772,10 @@ same here 0       1
     func setupVmaAllocator() {
         var allocatorCreateInfo = 
             VmaAllocatorCreateInfo(
-                flags: UInt32(VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT.rawValue), 
+                flags: 0, // Remove VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT to reduce overhead
                 physicalDevice: physicalDevice!, device: logicalDevice!, 
-                preferredLargeHeapBlockSize: 0, pAllocationCallbacks: nil, 
+                preferredLargeHeapBlockSize: 16 * 1024 * 1024, // 16MB blocks instead of default
+                pAllocationCallbacks: nil, 
                 pDeviceMemoryCallbacks: nil, pHeapSizeLimit: nil, pVulkanFunctions: nil, 
                 instance: instance!, vulkanApiVersion: makeVulkanVersion(major: 1, minor: 1, patch: 0), 
                 pTypeExternalMemoryHandleTypes: nil
@@ -824,14 +831,30 @@ same here 0       1
     }
 
     func chooseSwapSurfaceFormat(availableFormats: inout DynamicArray<VkSurfaceFormatKHR>) -> VkSurfaceFormatKHR {
+        print("Available surface formats:")
         for i in 0..<availableFormats.getLength() {
-            print(availableFormats[i].format)
+            print("  Format \(i): \(availableFormats[i].format), Color Space: \(availableFormats[i].colorSpace)")
+        }
+        
+        // Look for the preferred format
+        for i in 0..<availableFormats.getLength() {
             let availableFormat: VkSurfaceFormatKHR = availableFormats[i]
             if availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
+                print("  Selected preferred format: VK_FORMAT_B8G8R8A8_SRGB")
                 return availableFormat
             }
         }
 
+        // If preferred format not found, look for any SRGB format
+        for i in 0..<availableFormats.getLength() {
+            let availableFormat: VkSurfaceFormatKHR = availableFormats[i]
+            if availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
+                print("  Selected SRGB format: \(availableFormat.format)")
+                return availableFormat
+            }
+        }
+
+        print("  Using fallback format: \(availableFormats[0].format)")
         return availableFormats[0]
     }
 
@@ -882,12 +905,16 @@ same here 0       1
         //technically the logic here is still correct then but we need to be careful about any
         //assumptions we make here. This is important however when the window becomes minimized
         //because then it will return (0, 0) instead of the window size (before it was minimized)
+        print("Surface capabilities current extent: \(capabilities.currentExtent.width)x\(capabilities.currentExtent.height)")
+        
         if capabilities.currentExtent.width != UInt32.max {
+            print("Using surface current extent: \(capabilities.currentExtent.width)x\(capabilities.currentExtent.height)")
             return capabilities.currentExtent
         } else {    //THIS IS NEVER GETTING EXECUTED????
             var width: Int32 = 0
             var height: Int32 = 0
             sdlContext.getWindowSizeInPixels(width: &width, height: &height)
+            print("SDL window size: \(width)x\(height)")
 
             var actualExtent = VkExtent2D(width: UInt32(width), height: UInt32(height))
             // this clamps the values of the swap chain's extent
@@ -895,20 +922,36 @@ same here 0       1
             actualExtent.width = max(capabilities.minImageExtent.width, min(capabilities.maxImageExtent.width, actualExtent.width))
             actualExtent.height = max(capabilities.minImageExtent.height, min(capabilities.maxImageExtent.height, actualExtent.height))
 
+            print("Calculated extent (after clamping): \(actualExtent.width)x\(actualExtent.height)")
             return actualExtent
         }
     }
 
     func cleanupSwapchain() {
-        for i in 0..<swapchainFrameBuffers!.getLength() {
-            vkDestroyFramebuffer(logicalDevice, swapchainFrameBuffers![i], nil)
+        if swapchainFrameBuffers != nil {
+            while !swapchainFrameBuffers!.isEmpty() {
+                let fb = swapchainFrameBuffers!.consumeElement(at: swapchainFrameBuffers!.getLength() - 1)
+                if fb != nil {
+                    vkDestroyFramebuffer(logicalDevice, fb, nil)
+                }
+            }
+            swapchainFrameBuffers = nil
         }
 
-        for i in 0..<swapchainImageViews!.getLength() {
-            vkDestroyImageView(logicalDevice, swapchainImageViews![i], nil)
+        if swapchainImageViews != nil {
+            while !swapchainImageViews!.isEmpty() {
+                let iv = swapchainImageViews!.consumeElement(at: swapchainImageViews!.getLength() - 1)
+                if iv != nil {
+                    vkDestroyImageView(logicalDevice, iv, nil)
+                }
+            }
+            swapchainImageViews = nil
         }
 
-        vkDestroySwapchainKHR(logicalDevice, swapchain, nil)
+        if swapchain != nil {
+            vkDestroySwapchainKHR(logicalDevice, swapchain, nil)
+            swapchain = nil
+        }
     }
 
     func recreateSwapchain() {
@@ -925,6 +968,14 @@ same here 0       1
 
     func createSwapchain() {
         print("\nInside createSwapchain!\n")
+        // Ensure device is idle and previous swapchain is cleaned up before creating a new one
+        vkDeviceWaitIdle(logicalDevice)
+        cleanupSwapchain()
+
+        // Check available memory before swapchain creation
+        print("Checking system memory before swapchain creation...")
+        let totalVRAM = getTotalVRAM()
+        print("Total VRAM available: \(totalVRAM / (1024 * 1024)) MB")
 
         var swapchainSupport = querySwapchainSupport(physDevice: &physicalDevice!)
         let surfaceFormat = chooseSwapSurfaceFormat(availableFormats: &swapchainSupport.formats!)
@@ -933,10 +984,15 @@ same here 0       1
 
         //add + 1 at the end for triple buffering (probably, it does depend on hardware)
         var imageCount = swapchainSupport.capabilities.minImageCount
+        print("Minimum image count: \(swapchainSupport.capabilities.minImageCount)")
+        print("Maximum image count: \(swapchainSupport.capabilities.maxImageCount)")
+        // Use minimum image count to reduce memory usage
+        // imageCount += 1  // Comment out triple buffering for now
         //this check is just in case we decide we want triple buffering or not
         if swapchainSupport.capabilities.maxImageCount > 0 && imageCount > swapchainSupport.capabilities.maxImageCount {
             imageCount = swapchainSupport.capabilities.maxImageCount
         }
+        print("Using image count: \(imageCount)")
 
         //time for BS again
         var createInfo = VkSwapchainCreateInfoKHR()
@@ -947,19 +1003,19 @@ same here 0       1
         createInfo.imageColorSpace = surfaceFormat.colorSpace
         createInfo.imageExtent = extent
         createInfo.imageArrayLayers = 1
+        // Restrict imageUsage to only VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT for compatibility
         createInfo.imageUsage = UInt32(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT.rawValue)
 
-        if queueManager!.graphicsQueueFamilyIndex != queueManager!.presentQueueFamilyIndex ||
-            queueManager!.graphicsQueueFamilyIndex != queueManager!.transferQueueFamilyIndex {
-
-            print("At least one queue family is different, using VK_SHARING_MODE_CONCURRENT!")
-
+        if queueManager!.graphicsQueueFamilyIndex != queueManager!.presentQueueFamilyIndex {
+            // VK_SHARING_MODE_CONCURRENT for graphics/present queues only
+            print("Using VK_SHARING_MODE_CONCURRENT for graphics/present queues: [\(queueManager!.graphicsQueueFamilyIndex!), \(queueManager!.presentQueueFamilyIndex!)]")
             createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT
-
-            createInfo.queueFamilyIndexCount = UInt32(uniqueQueueFamilyIndices!.getLength())
-            createInfo.pQueueFamilyIndices = uniqueQueueFamilyIndices!.getDataAsConstPointer()
+            createInfo.queueFamilyIndexCount = 2
+            let indices: [UInt32] = [queueManager!.graphicsQueueFamilyIndex!, queueManager!.presentQueueFamilyIndex!]
+            createInfo.pQueueFamilyIndices = indices.withUnsafeBufferPointer { $0.baseAddress }
         } else {
-            print("All queue families are the same, using VK_SHARING_MODE_EXCLUSIVE!")
+            // VK_SHARING_MODE_EXCLUSIVE
+            print("Using VK_SHARING_MODE_EXCLUSIVE for graphics/present queue: \(queueManager!.graphicsQueueFamilyIndex!)")
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE
             createInfo.queueFamilyIndexCount = 0
             createInfo.pQueueFamilyIndices = nil
@@ -971,8 +1027,45 @@ same here 0       1
         createInfo.clipped = VK_TRUE
         createInfo.oldSwapchain = nil
 
-        let result = vkCreateSwapchainKHR(logicalDevice, &createInfo, nil, &swapchain)
+        var result = vkCreateSwapchainKHR(logicalDevice, &createInfo, nil, &swapchain)
+        print("vkCreateSwapchainKHR initial result: \(result)")
+        print("result.rawValue: \(result.rawValue), VK_ERROR_SURFACE_LOST_KHR.rawValue: \(VK_ERROR_SURFACE_LOST_KHR.rawValue)")
+        if Int32(result.rawValue) == Int32(VK_ERROR_SURFACE_LOST_KHR.rawValue) {
+            print("VK_ERROR_SURFACE_LOST_KHR detected! Destroying and recreating surface, then retrying swapchain creation...")
+            print("Surface pointer before destroy: \(String(describing: surface))")
+            // Destroy old surface
+            if let instance = instance, let surface = surface {
+                vkDestroySurfaceKHR(instance, surface, nil)
+            }
+            surface = nil
+            // Recreate surface
+            createSurface()
+            print("Surface pointer after recreate: \(String(describing: surface))")
+            // Re-query swapchain support and update createInfo
+            swapchainSupport = querySwapchainSupport(physDevice: &physicalDevice!)
+            let surfaceFormat = chooseSwapSurfaceFormat(availableFormats: &swapchainSupport.formats!)
+            _ = chooseSwapPresentMode(availablePresentModes: &swapchainSupport.presentModes!)
+            let extent = chooseSwapExtent(capabilities: &swapchainSupport.capabilities)
+            imageCount = swapchainSupport.capabilities.minImageCount
+            createInfo.surface = surface
+            createInfo.imageFormat = surfaceFormat.format
+            createInfo.imageColorSpace = surfaceFormat.colorSpace
+            createInfo.imageExtent = extent
+            createInfo.minImageCount = imageCount
+            print("Attempting swapchain creation after surface recreation...")
+            result = vkCreateSwapchainKHR(logicalDevice, &createInfo, nil, &swapchain)
+            print("vkCreateSwapchainKHR retry result: \(result)")
+        }
         if result != VK_SUCCESS {
+            print("Swapchain creation failed with error code: \(result)")
+            print("Surface format: \(surfaceFormat.format), color space: \(surfaceFormat.colorSpace)")
+            print("Present mode: \(presentMode)")
+            print("Extent: \(extent.width)x\(extent.height)")
+            print("Image count: \(imageCount)")
+            print("Surface capabilities:")
+            print("  Min extent: \(swapchainSupport.capabilities.minImageExtent.width)x\(swapchainSupport.capabilities.minImageExtent.height)")
+            print("  Max extent: \(swapchainSupport.capabilities.maxImageExtent.width)x\(swapchainSupport.capabilities.maxImageExtent.height)")
+            print("  Current extent: \(swapchainSupport.capabilities.currentExtent.width)x\(swapchainSupport.capabilities.currentExtent.height)")
             fatalError("Couldnt create swapchain!")
         } else {
             print("swapchain created!")
@@ -1336,7 +1429,7 @@ same here 0       1
         
         //use vertex3d for binding and attributes
         var bindingDescription = Vertex3D.getBindingDescription()
-        var attributeDescriptions = Vertex3D.getAttributeDescriptions()
+        let attributeDescriptions = Vertex3D.getAttributeDescriptions()
 
         vertexInputInfo.vertexBindingDescriptionCount = 1
         vertexInputInfo.vertexAttributeDescriptionCount = UInt32(attributeDescriptions.getLength())
@@ -1870,8 +1963,8 @@ same here 0       1
         
         for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
-            var vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
-            var offsets = DynamicArray<VkDeviceSize>(0)
+            let vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
+            let offsets = DynamicArray<VkDeviceSize>(0)
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
 
             //bind index buffer
@@ -1934,7 +2027,7 @@ same here 0       1
         //for dynamic meshes
         for model in sortedModels where model.isDynamic && model.isVisible(in: frustum) {
             // bind dynamic vertex buffer
-            var vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
+            let vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
             let offsets = DynamicArray<VkDeviceSize>(0)
             vkCmdBindVertexBuffers(commandBuffer!, 0, 1, vertexBuffers.getData(), offsets.getData())
 

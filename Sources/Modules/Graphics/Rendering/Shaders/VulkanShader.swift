@@ -16,6 +16,10 @@ public class VulkanShader: Shader {
         }
     }
     
+    public var resourceType: ResourceType {
+        return .graphics(.shader)
+    }
+    
     // MARK: - Private Properties
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
@@ -108,7 +112,7 @@ public class VulkanShader: Shader {
         try createPipelineLayout()
         
         // Create material binding
-        materialBinding = try MaterialShaderBinding(device: device, vmaAllocator: vmaAllocator)
+        materialBinding = MaterialShaderBinding(device: device, vmaAllocator: vmaAllocator)
         
         // Allocate descriptor sets
         try allocateDescriptorSets()
@@ -155,7 +159,7 @@ public class VulkanShader: Shader {
         guard let materialBinding = materialBinding else {
             throw ShaderError.bindingFailed("Material binding not initialized")
         }
-        try materialBinding.update(material: material)
+        materialBinding.update(material: material)
     }
     
     public func setTransform(model: Matrix4x4, view: Matrix4x4, projection: Matrix4x4) {

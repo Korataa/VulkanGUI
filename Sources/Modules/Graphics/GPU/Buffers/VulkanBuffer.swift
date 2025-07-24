@@ -4,8 +4,8 @@ import Cvma
 import Foundation
 
 public struct VulkanBuffer: GPUBuffer {
-    public var resourceType: GraphicsResourceType {
-        get { return .buffer(usage) }
+    public var resourceType: ResourceType {
+        get { return .graphics(.buffer(usage)) }
         set { /* Optionally handle set if needed, or leave empty if not supported */ }
     }
     public var name: String?

@@ -9,6 +9,9 @@ public protocol GPUBuffer: GraphicsResource {
 
     /// Uploads data to the gpu buffer
     func uploadData(data: UnsafeRawPointer, size: Int)
+    
+    /// Uploads data to the gpu buffer at a specific offset
+    func uploadData(data: UnsafeRawPointer, size: Int, offset: Int)
 
     func cleanup()
 }

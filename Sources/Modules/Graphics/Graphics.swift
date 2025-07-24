@@ -1,8 +1,37 @@
+import Cvulkan
+import Cvma
+
 public class Graphics {
+    // Struct to bundle info for ResourceSystem
+    public struct ResourceSystemInfo {
+        public let device: VkDevice
+        public let vmaAllocator: VmaAllocator
+        public let totalVRAM: UInt64
+        public let graphicsResourceManager: GraphicsResourceManager
+    }
+
+    public func getResourceSystemInfo() -> ResourceSystemInfo? {
+        guard let device = renderer.logicalDevice,
+              let allocator = renderer.vmaAllocator,
+              let resourceManager = graphicsResourceManager else {
+            return nil
+        }
+        return ResourceSystemInfo(
+            device: device,
+            vmaAllocator: allocator,
+            totalVRAM: renderer.getTotalVRAM(),
+            graphicsResourceManager: resourceManager
+        )
+    }
     private var renderer: VulkanRenderer
     private var sdlContext: SDLContext
 
-    var graphicsResourceManager: GraphicsResourceManager
+    var graphicsResourceManager: GraphicsResourceManager?
+    
+    // Public accessor for the resource manager
+    public var resourceManager: GraphicsResourceManager {
+        return graphicsResourceManager!
+    }
 
     var pipelines: [any GraphicsPipeline] = []
     var renderModels: [Model] = []        //Models to render
@@ -10,18 +39,14 @@ public class Graphics {
     public init(sdlContext: SDLContext) {
         self.sdlContext = sdlContext
         renderer = VulkanRenderer(context: sdlContext)
-
-        //initialize vulkan first to get handles
         renderer.initialize()
+    }
 
-        //probably here we will initialize the 3 big buffers
-        self.graphicsResourceManager = GraphicsResourceManager(
-            device: renderer.logicalDevice!,
-            vmaAllocator: renderer.vmaAllocator!,
-            totalVRAM: renderer.getTotalVRAM()
-        )
-
-        //give renderer access to ResourceManager
+    public init(sdlContext: SDLContext, graphicsResourceManager: GraphicsResourceManager) {
+        self.sdlContext = sdlContext
+        renderer = VulkanRenderer(context: sdlContext)
+        renderer.initialize()
+        self.graphicsResourceManager = graphicsResourceManager
         renderer.setResourceManager(graphicsResourceManager)
     }
 

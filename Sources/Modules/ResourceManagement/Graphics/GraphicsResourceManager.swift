@@ -2,14 +2,15 @@ import Foundation
 import Cvulkan
 import Cvma
 
-public class GraphicsResourceManager: ResourceManager {
-    public typealias ManagedResource = GraphicsResource
+/// Manages graphics resources using ID-based tracking instead of direct storage
+/// This approach works with ~Copyable types by avoiding storage in collections
+public final class GraphicsResourceManager: ResourceManager {
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
 
-    // Resource tracking
-    private var resources: [Int: GraphicsResource] = [:]
-    private var nextResourceId: Int = 0
+    // ID-based resource tracking - we don't store the resources themselves
+    private var nextResourceId: Int = 1
+    private var activeResourceIds: Set<Int> = []
     
     // Buffer management
     public var staticVertexBuffer: GPUBuffer?
@@ -27,6 +28,12 @@ public class GraphicsResourceManager: ResourceManager {
     private var dynamicVertexOffset: Int = 0
     private var indexOffset: Int = 0
     
+    // Allocation percentages for different buffer types
+    private let initialStaticVertexPercent: Double = 0.5  // Starts at 50% of initial VRAM
+    private let initialDynamicVertexPercent: Double = 0.2 // Starts at 20% of initial VRAM
+    private let initialIndexBufferPercent: Double = 0.2   // Starts at 20% of initial VRAM
+    private let initialTransferPercent: Double = 0.1      // Starts at 10% of initial VRAM
+    
     // Growth threshold - when to increase available VRAM (80% of current available)
     private let growthThreshold: Double = 0.8
     
@@ -37,6 +44,96 @@ public class GraphicsResourceManager: ResourceManager {
         self.availableVRAM = totalVRAM / 10  // Start with 10% of total VRAM
     }
     
+    // MARK: - ResourceManager Protocol
+    public func canHandle(_ resourceType: ResourceType) -> Bool {
+        switch resourceType {
+        case .graphics(_):
+            return true
+        default:
+            return false
+        }
+    }
+    
+    /// Registers a resource and returns an ID for tracking
+    /// The resource ownership remains with the caller
+    public func addResource<T: Resource & ~Copyable>(_ resource: consuming T) -> Int {
+        // Validate that this is a graphics resource
+        switch resource.resourceType {
+        case .graphics(_):
+            break
+        default:
+            fatalError("GraphicsResourceManager can only handle GraphicsResource types")
+        }
+        
+        let id = nextResourceId
+        nextResourceId += 1
+        
+        // Set the resource ID - this mutates the resource in place
+        var mutableResource = resource
+        mutableResource.id = id
+        
+        // Track the ID as active
+        activeResourceIds.insert(id)
+        
+        // Return the resource to the caller (they own it) and the ID for tracking
+        // The consume/return pattern ensures the resource is moved back to caller
+        _ = consume mutableResource
+        
+        return id
+    }
+    
+    /// Remove a resource ID from tracking
+    /// The caller is responsible for cleaning up the actual resource
+    public func removeResource(id: Int) -> Bool {
+        return activeResourceIds.remove(id) != nil
+    }
+    
+    /// Get a resource by ID - returns nil since we use ID-based tracking
+    /// Resources are owned by their creators, not stored here
+    public func getResource(_ id: Int) -> (any Resource)? {
+        // With ID-based approach, we don't store resources
+        // Callers should maintain their own resource references
+        return nil
+    }
+    
+    /// Remove a resource by ID (protocol conformance)
+    public func removeResource(_ id: Int) {
+        _ = removeResource(id: id)
+    }
+    
+    /// Check if a resource ID is being tracked
+    public func hasResource(id: Int) -> Bool {
+        return activeResourceIds.contains(id)
+    }
+    
+    /// Get the count of tracked resources
+    public func getResourceCount() -> Int {
+        return activeResourceIds.count
+    }
+    
+    /// Get all active resource IDs
+    public func getAllResourceIds() -> [Int] {
+        return Array(activeResourceIds)
+    }
+    
+    public func cleanup() {
+        // Clean up buffers
+        staticVertexBuffer?.cleanup()
+        dynamicVertexBuffer?.cleanup()
+        transferBuffer?.cleanup()
+        indexBuffer?.cleanup()
+        
+        staticVertexBuffer = nil
+        dynamicVertexBuffer = nil
+        transferBuffer = nil
+        indexBuffer = nil
+        
+        // Clear tracking data
+        activeResourceIds.removeAll()
+        usedVRAM = 0
+    }
+    
+    // MARK: - Memory Management
     private func checkAndGrowVRAM(requiredSize: UInt64) throws {
         // Check if we're near the threshold or need more space
         if (usedVRAM + requiredSize) >= UInt64(Double(availableVRAM) * growthThreshold) {
@@ -72,12 +169,7 @@ public class GraphicsResourceManager: ResourceManager {
         try createTransferBuffer()
     }
     
-    // Initial buffer size percentages (buffers can grow independently during runtime)
-    private let initialStaticVertexPercent: Double = 0.5  // Starts at 50% of initial VRAM
-    private let initialDynamicVertexPercent: Double = 0.2 // Starts at 20% of initial VRAM
-    private let initialIndexBufferPercent: Double = 0.2   // Starts at 20% of initial VRAM
-    private let initialTransferPercent: Double = 0.1      // Starts at 10% of initial VRAM
-    
+    // MARK: - Buffer Creation
     private func createStaticVertexBuffer() throws {
         let size = UInt64(Double(availableVRAM) * initialStaticVertexPercent)
         staticVertexBuffer = VulkanBuffer(
@@ -95,8 +187,7 @@ public class GraphicsResourceManager: ResourceManager {
             vmaAllocator: vmaAllocator,
             size: size,
             usage: .Vertex,
-            properties: [.CPUVisible, .CPUCoherent],
-            isDynamic: true
+            properties: .CPUVisible
         )
         dynamicVertexOffset = 0
     }
@@ -118,112 +209,158 @@ public class GraphicsResourceManager: ResourceManager {
             vmaAllocator: vmaAllocator,
             size: size,
             usage: .TransferSrc,
-            properties: .GPUUpload
+            properties: .CPUVisible
         )
     }
     
+    // MARK: - Buffer Type Enumeration
     public enum BufferType {
         case staticVertex
         case dynamicVertex
         case index
         case transfer
-        
-        var buffer: (GraphicsResourceManager) -> GPUBuffer? {
-            switch self {
-            case .staticVertex: return { $0.staticVertexBuffer }
-            case .dynamicVertex: return { $0.dynamicVertexBuffer }
-            case .index: return { $0.indexBuffer }
-            case .transfer: return { $0.transferBuffer }
+    }
+    
+    // MARK: - Generic Buffer Allocation
+    public func allocateRegion(type: BufferType, size: Int) throws -> BufferRegion {
+        switch type {
+        case .staticVertex:
+            guard let buffer = staticVertexBuffer else {
+                throw BufferError.bufferNotInitialized
             }
-        }
-        
-        var offset: (GraphicsResourceManager) -> Int {
-            switch self {
-            case .staticVertex: return { $0.staticVertexOffset }
-            case .dynamicVertex: return { $0.dynamicVertexOffset }
-            case .index: return { $0.indexOffset }
-            case .transfer: return { _ in 0 } // Transfer buffer doesn't need offset tracking
+            try updateVRAMUsage(delta: Int64(size))
+            
+            let region = BufferRegion(
+                offset: staticVertexOffset,
+                size: size,
+                buffer: buffer
+            )
+            staticVertexOffset += size
+            return region
+            
+        case .dynamicVertex:
+            guard let buffer = dynamicVertexBuffer else {
+                throw BufferError.bufferNotInitialized
             }
-        }
-        
-        var setOffset: (GraphicsResourceManager, Int) -> Void {
-            switch self {
-            case .staticVertex: return { $0.staticVertexOffset = $1 }
-            case .dynamicVertex: return { $0.dynamicVertexOffset = $1 }
-            case .index: return { $0.indexOffset = $1 }
-            case .transfer: return { _, _ in } // Transfer buffer doesn't track offset
+            try updateVRAMUsage(delta: Int64(size))
+            
+            let region = BufferRegion(
+                offset: dynamicVertexOffset,
+                size: size,
+                buffer: buffer
+            )
+            dynamicVertexOffset += size
+            return region
+            
+        case .index:
+            guard let buffer = indexBuffer else {
+                throw BufferError.bufferNotInitialized
             }
+            try updateVRAMUsage(delta: Int64(size))
+            
+            let region = BufferRegion(
+                offset: indexOffset,
+                size: size,
+                buffer: buffer
+            )
+            indexOffset += size
+            return region
+            
+        case .transfer:
+            guard let buffer = transferBuffer else {
+                throw BufferError.bufferNotInitialized
+            }
+            // Transfer buffer doesn't track offset since it's used for temporary operations
+            return BufferRegion(
+                offset: 0,
+                size: size,
+                buffer: buffer
+            )
         }
     }
     
-    public func allocateRegion(type: BufferType, size: Int, alignment: Int = 16) throws -> BufferRegion {
-        guard let buffer = type.buffer(self) else {
-            throw BufferError.notInitialized
+    // MARK: - Vertex Buffer Management
+    public func allocateStaticVertices<T>(vertices: [T]) throws -> BufferRegion {
+        guard let buffer = staticVertexBuffer else {
+            throw BufferError.bufferNotInitialized
         }
         
-        let currentOffset = type.offset(self)
-        let alignedOffset = (currentOffset + alignment - 1) / alignment * alignment
-        
-        guard alignedOffset + size <= Int(buffer.size) else {
-            throw BufferError.outOfSpace
-        }
-        
-        type.setOffset(self, alignedOffset + size)
+        let size = vertices.count * MemoryLayout<T>.stride
         try updateVRAMUsage(delta: Int64(size))
         
-        return BufferRegion(offset: alignedOffset, size: size, buffer: buffer)
-    }
-
-    public func resetBuffer(type: BufferType) {
-        switch type {
-        case .staticVertex: staticVertexOffset = 0
-        case .dynamicVertex: dynamicVertexOffset = 0
-        case .index: indexOffset = 0
-        case .transfer: break // Transfer buffer doesn't track offset
-    }
-}
-    
-    // MARK: - Graphics Resource Management
-    
-    public func addResource(_ resource: GraphicsResource) -> Int {
-        let id = nextResourceId
-        nextResourceId += 1
-        resources[id] = resource
-        return id
-    }
-    
-    public func getResource(_ id: Int) -> GraphicsResource? {
-        return resources[id]
-    }
-
-    public func removeResource(_ id: Int) {
-        if let resource = resources[id] {
-            resource.cleanup()
-            resources.removeValue(forKey: id)
-        }
-    }
-    
-    public func cleanup() {
-        // Clean up all graphics resources
-        for resource in resources.values {
-            resource.cleanup()
-        }
-        resources.removeAll()
+        let region = BufferRegion(
+            offset: staticVertexOffset,
+            size: size,
+            buffer: buffer
+        )
         
-        // Clean up buffer management
-        staticVertexBuffer = nil
-        dynamicVertexBuffer = nil
-        indexBuffer = nil
-        usedVRAM = 0
-        availableVRAM = totalVRAM / 10  // Reset to initial 10% allocation
+        // Upload vertices to buffer
+        vertices.withUnsafeBufferPointer { ptr in
+            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: staticVertexOffset)
+        }
+        
+        staticVertexOffset += size
+        return region
+    }
+    
+    public func allocateDynamicVertices<T>(vertices: [T]) throws -> BufferRegion {
+        guard let buffer = dynamicVertexBuffer else {
+            throw BufferError.bufferNotInitialized
+        }
+        
+        let size = vertices.count * MemoryLayout<T>.stride
+        try updateVRAMUsage(delta: Int64(size))
+        
+        let region = BufferRegion(
+            offset: dynamicVertexOffset,
+            size: size,
+            buffer: buffer
+        )
+        
+        // Upload vertices to buffer
+        vertices.withUnsafeBufferPointer { ptr in
+            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: dynamicVertexOffset)
+        }
+        
+        dynamicVertexOffset += size
+        return region
+    }
+    
+    public func allocateIndices(indices: [UInt32]) throws -> BufferRegion {
+        guard let buffer = indexBuffer else {
+            throw BufferError.bufferNotInitialized
+        }
+        
+        let size = indices.count * MemoryLayout<UInt32>.stride
+        try updateVRAMUsage(delta: Int64(size))
+        
+        let region = BufferRegion(
+            offset: indexOffset,
+            size: size,
+            buffer: buffer
+        )
+        
+        // Upload indices to buffer
+        indices.withUnsafeBufferPointer { ptr in
+            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: indexOffset)
+        }
+        
+        indexOffset += size
+        return region
+    }
+    
+    // MARK: - Memory Information
+    public func getMemoryInfo() -> (total: UInt64, available: UInt64, used: UInt64) {
+        return (total: totalVRAM, available: availableVRAM, used: usedVRAM)
+    }
+    
+    public func getVRAMUsagePercent() -> Double {
+        return Double(usedVRAM) / Double(availableVRAM)
     }
 }
 
-/// Just general buffer errors for a variety of cases
 public enum BufferError: Error {
-    case outOfSpace
-    case bufferCleaned
-    case invalidAlignment
+    case bufferNotInitialized
     case outOfVRAM
-    case notInitialized
+    case uploadFailed
 }

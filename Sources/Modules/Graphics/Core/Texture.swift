@@ -13,7 +13,7 @@ public struct Texture: ~Copyable, GraphicsResource {
         }
     }
 
-    public var resourceType: GraphicsResourceType { .texture }
+    public var resourceType: ResourceType { .graphics(.texture) }
 
     public let width: Int
     public let height: Int

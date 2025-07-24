@@ -59,10 +59,10 @@ public class AssetLoader {
             let image = dataVal.images[i]
             if let imageData = loadImageData(from: image, basePath: basePath) {
                 let (pixels, width, height, channels) = decodeImage(imageData)
-                let texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
+                var texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
                 
-                // Register texture with resource manager and get ID
-                let textureId = resourceManager.addResource(texture)
+                // Register texture with resource manager and get ID using explicit move
+                let textureId = resourceManager.addResource(consume texture)
                 textureStorage.addTextureId(textureId, width: Int(width), height: Int(height), channels: Int(channels))
             }
         }
@@ -86,18 +86,34 @@ public class AssetLoader {
 
             //Add textures
             let baseColorTex = mat.pbr_metallic_roughness.base_color_texture
-            material.baseColorTextureIndex = baseColorTex.texture - dataVal.textures
+            if let texPtr = baseColorTex.texture, let basePtr = dataVal.textures {
+                material.baseColorTextureIndex = texPtr - basePtr
+            } else {
+                material.baseColorTextureIndex = -1
+            }
 
             //similar for other textures
             let metallicRoughnessTex = mat.pbr_metallic_roughness.metallic_roughness_texture
-            material.metallicRoughnessTextureIndex = metallicRoughnessTex.texture - dataVal.textures
+            if let texPtr = metallicRoughnessTex.texture, let basePtr = dataVal.textures {
+                material.metallicRoughnessTextureIndex = texPtr - basePtr
+            } else {
+                material.metallicRoughnessTextureIndex = -1
+            }
 
             let normalTex = mat.normal_texture
-            material.normalTextureIndex = normalTex.texture - dataVal.textures
+            if let texPtr = normalTex.texture, let basePtr = dataVal.textures {
+                material.normalTextureIndex = texPtr - basePtr
+            } else {
+                material.normalTextureIndex = -1
+            }
             material.normalScale = normalTex.scale
 
             let occlusionTex = mat.occlusion_texture
-            material.occlusionTextureIndex = occlusionTex.texture - dataVal.textures
+            if let texPtr = occlusionTex.texture, let basePtr = dataVal.textures {
+                material.occlusionTextureIndex = texPtr - basePtr
+            } else {
+                material.occlusionTextureIndex = -1
+            }
             // Note: cgltf_texture_view doesn't have strength field, using default
             material.occlusionStrength = 1.0
 
@@ -114,6 +130,12 @@ public class AssetLoader {
         // --- 6. (Finally) load mesh data and upload to buffers ---
         guard resourceManager.staticVertexBuffer != nil,
               resourceManager.indexBuffer != nil else {
+                if resourceManager.staticVertexBuffer == nil {
+                    print("Error: staticVertexBuffer is nil")
+                }
+                if resourceManager.indexBuffer == nil {
+                    print("Error: indexBuffer is nil")
+                }
                 print("Error: Buffers not initialized")
                 return nil
         }
@@ -144,20 +166,24 @@ public class AssetLoader {
                             (2 * MemoryLayout<Float>.stride)    //texcoord: 2 floats * 4 bytes = 8 bytes
                     let count = accessor.count
 
+                    guard let bufferData = buffer.data else {
+                        print("Warning: buffer.data is nil for attribute type \(attributeTypeToString(attr.type)), skipping this attribute.")
+                        continue
+                    }
                     if attr.type == cgltf_attribute_type_position {
-                        let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
                             let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
                             positions.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
                         }
                     } else if attr.type == cgltf_attribute_type_normal {
-                        let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
                             let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
                             normals.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
                         }
                     } else if attr.type == cgltf_attribute_type_texcoord {
-                        let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
                             let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
                             texCoords.append(SIMD2<Float>(ptr[0], ptr[1]))
