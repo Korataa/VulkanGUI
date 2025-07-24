@@ -1,0 +1,32 @@
+GraphicsResourceManager Resource Ownership and Access – Design Summary
+
+Current Design:
+
+GraphicsResourceManager tracks resource IDs but does not store the actual resources.
+When you call addResource, you pass ownership of the resource to the manager, but the manager only tracks the ID and expects the caller to keep the reference.
+getResource(_ id: Int) always returns nil because resources are not stored internally.
+Resource cleanup and lifetime management are the caller’s responsibility.
+Implications:
+
+You cannot retrieve a resource by ID from the manager after registration.
+Centralized resource management (ownership, cleanup, sharing) is not possible with this design.
+If you want to access a resource later (e.g., for rendering), you must keep your own reference outside the manager.
+Recommended Design (for centralized management):
+
+The resource manager should store resources internally (e.g., in a dictionary: [Int: Resource]).
+When you register a resource, the manager takes ownership and stores it.
+getResource(_ id: Int) should return the stored resource for read-only access.
+The manager is responsible for resource lifetime and cleanup.
+This enables safe retrieval, sharing, and centralized cleanup.
+Example Implementation:
+
+Summary Table:
+
+Approach	Ownership	Retrieval	Cleanup	Centralized?
+Current (ID only)	Caller	No	Caller	No
+Recommended (store)	Manager	Yes	Manager	Yes
+Conclusion:
+If you want centralized resource management and retrieval by ID, refactor GraphicsResourceManager to store resources internally.
+If you keep the current design, callers must manage all resource references and cleanup themselves.
+
+Let me know if you want a more detailed technical breakdown or migration steps!
