@@ -5,10 +5,14 @@ import Cvma
 /// Manages graphics resources using ID-based tracking instead of direct storage
 /// This approach works with ~Copyable types by avoiding storage in collections
 public final class GraphicsResourceManager: ResourceManager {
+    public typealias ResourceType = any GraphicsResource
+
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
 
     // ID-based resource tracking - we don't store the resources themselves
+    //we do now
+    private var resources: DynamicArray<GraphicsResource> = DynamicArray()
     private var nextResourceId: Int = 1
     private var activeResourceIds: Set<Int> = []
     
@@ -56,7 +60,7 @@ public final class GraphicsResourceManager: ResourceManager {
     
     /// Registers a resource and returns an ID for tracking
     /// The resource ownership remains with the caller
-    public func addResource<T: Resource & ~Copyable>(_ resource: consuming T) -> Int {
+    public func addResource(_ resource: consuming ResourceType) -> Int {
         // Validate that this is a graphics resource
         switch resource.resourceType {
         case .graphics(_):
@@ -64,21 +68,23 @@ public final class GraphicsResourceManager: ResourceManager {
         default:
             fatalError("GraphicsResourceManager can only handle GraphicsResource types")
         }
-        
+
         let id = nextResourceId
         nextResourceId += 1
-        
+
         // Set the resource ID - this mutates the resource in place
         var mutableResource = resource
         mutableResource.id = id
-        
+
+        // Store the resource in the DynamicArray
+        resources.append(mutableResource)
+
         // Track the ID as active
         activeResourceIds.insert(id)
-        
-        // Return the resource to the caller (they own it) and the ID for tracking
-        // The consume/return pattern ensures the resource is moved back to caller
-        _ = consume mutableResource
-        
+
+        // The resource is now owned by the manager, do not return it to the caller
+        // (no consume needed here)
+
         return id
     }
     
@@ -88,12 +94,12 @@ public final class GraphicsResourceManager: ResourceManager {
         return activeResourceIds.remove(id) != nil
     }
     
-    /// Get a resource by ID - returns nil since we use ID-based tracking
-    /// Resources are owned by their creators, not stored here
-    public func getResource(_ id: Int) -> (any Resource)? {
-        // With ID-based approach, we don't store resources
-        // Callers should maintain their own resource references
-        return nil
+    /// Get a resource by ID - returns the stored GraphicsResource if present
+    public func getResource(_ id: Int) -> ResourceType? {
+        // IDs start at 1, so index is id-1
+        let index = id - 1
+        guard index >= 0 && index < resources.count else { return nil }
+        return resources[index]
     }
     
     /// Remove a resource by ID (protocol conformance)

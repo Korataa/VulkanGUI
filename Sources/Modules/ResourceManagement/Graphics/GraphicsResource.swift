@@ -1,7 +1,56 @@
+// Example concrete graphics resource: Texture
+public struct TextureResource: GraphicsResource {
+    public var name: String?
+    public var id: Int?
+    public let graphicsType: GraphicsResourceType = .texture
+    public let image: VkImage
+    public let imageView: VkImageView
+    public let width: Int
+    public let height: Int
+    public let mipLevels: Int
+
+    public func cleanup() {
+        // Implement Vulkan cleanup for image/imageView here
+    }
+}
+
+// Example concrete graphics resource: Buffer
+public struct BufferResource: GraphicsResource {
+    public var name: String?
+    public var id: Int?
+    public let graphicsType: GraphicsResourceType
+    public let buffer: VkBuffer
+    public let size: Int
+
+    public func cleanup() {
+        // Implement Vulkan cleanup for buffer here
+    }
+}
+
+// Example concrete graphics resource: Shader
+public struct ShaderResource: GraphicsResource {
+    public var name: String?
+    public var id: Int?
+    public let graphicsType: GraphicsResourceType = .shader
+    public let shaderModule: VkShaderModule
+
+    public func cleanup() {
+        // Implement Vulkan cleanup for shader module here
+    }
+}
 import Foundation
 import Cvulkan
 
 /// Protocol for resources that are specifically related to graphics/GPU operations
-public protocol GraphicsResource: ~Copyable, Resource {
-    // resourceType is inherited from Resource and should return .graphics(GraphicsResourceType)
+public protocol GraphicsResource: Resource {
+    var resourceType: ResourceType { get }
+
+    // GraphicsResource-specific
+    var graphicsType: GraphicsResourceType { get }
+}
+
+public extension GraphicsResource {
+    var resourceType: ResourceType {
+        return .graphics(graphicsType)
+    }
 }

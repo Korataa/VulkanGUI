@@ -3,7 +3,7 @@ import Foundation
 public struct DynamicArray<T>: ~Copyable {
     //UnsafeMutablePointer is just a pointer to a block of memory
     private var buffer: UnsafeMutableRawPointer?
-    private var count: Int
+    public private(set) var count: Int
     private var capacity: Int
     private var elementSize: Int    //store the size of each element
 
