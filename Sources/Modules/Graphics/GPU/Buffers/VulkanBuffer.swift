@@ -3,11 +3,12 @@ import Cvma
 
 import Foundation
 
-public struct VulkanBuffer: GPUBuffer {
-    public var resourceType: ResourceType {
+public struct VulkanBuffer: ~Copyable, GPUBuffer {
+    public var resourceType: ResourceCategory {
         get { return .graphics(.buffer(usage)) }
         set { /* Optionally handle set if needed, or leave empty if not supported */ }
     }
+    public var graphicsType: GraphicsResourceType { .buffer(usage) }
     public var name: String?
     public var id: Int?
 
@@ -79,7 +80,7 @@ public struct VulkanBuffer: GPUBuffer {
         vmaUnmapMemory(vmaAllocator, allocation)
     }
 
-    public func copyTo( dstBuffer: VulkanBuffer, size: VkDeviceSize, 
+    public func copyTo( dstBuffer: borrowing VulkanBuffer, size: VkDeviceSize, 
                         transferCommandPool: VkCommandPool,
                         transferQueue: VkQueue, logicalDevice: VkDevice) {
         var allocInfo = VkCommandBufferAllocateInfo()
@@ -118,6 +119,51 @@ public struct VulkanBuffer: GPUBuffer {
 
         vkQueueSubmit(transferQueue, 1, &submitInfo, nil)
         vkQueueWaitIdle(transferQueue)
+    }
+
+    /// Moves data from a source buffer into this buffer, consuming the source buffer
+    /// This transfers ownership - the source buffer will be destroyed after the operation
+    public mutating func moveTo(from srcBuffer: consuming VulkanBuffer, size: VkDeviceSize,
+                                transferCommandPool: VkCommandPool,
+                                transferQueue: VkQueue, logicalDevice: VkDevice) {
+        var allocInfo = VkCommandBufferAllocateInfo()
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
+        allocInfo.commandPool = transferCommandPool
+        allocInfo.commandBufferCount = 1
+
+        var commandBuffer: VkCommandBuffer? = nil
+        vkAllocateCommandBuffers(logicalDevice, &allocInfo, &commandBuffer)
+        defer {
+            vkFreeCommandBuffers(logicalDevice, transferCommandPool, 1, &commandBuffer)
+        }
+
+        var beginInfo = VkCommandBufferBeginInfo()
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        beginInfo.flags = UInt32(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT.rawValue)
+        
+        vkBeginCommandBuffer(commandBuffer!, &beginInfo)
+
+        var copyRegion = VkBufferCopy()
+        copyRegion.srcOffset = 0
+        copyRegion.dstOffset = 0
+        copyRegion.size = size
+
+        vkCmdCopyBuffer(commandBuffer!, srcBuffer.bufferHandle.asVulkanBuffer(), self.bufferHandle.asVulkanBuffer(), 1, &copyRegion)
+
+        vkEndCommandBuffer(commandBuffer!)
+
+        var submitInfo = VkSubmitInfo()
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+        submitInfo.commandBufferCount = 1
+        withUnsafePointer(to: &commandBuffer) { ptr in 
+            submitInfo.pCommandBuffers = ptr
+        }
+
+        vkQueueSubmit(transferQueue, 1, &submitInfo, nil)
+        vkQueueWaitIdle(transferQueue)
+        
+        // srcBuffer is automatically cleaned up since it's consumed
     }
 
     public func cleanup() {

@@ -1,5 +1,6 @@
+/*
 // Example concrete graphics resource: Texture
-public struct TextureResource: GraphicsResource {
+public struct TextureResource: ~Copyable, GraphicsResource {
     public var name: String?
     public var id: Int?
     public let graphicsType: GraphicsResourceType = .texture
@@ -15,7 +16,7 @@ public struct TextureResource: GraphicsResource {
 }
 
 // Example concrete graphics resource: Buffer
-public struct BufferResource: GraphicsResource {
+public struct BufferResource: ~Copyable, GraphicsResource {
     public var name: String?
     public var id: Int?
     public let graphicsType: GraphicsResourceType
@@ -28,7 +29,7 @@ public struct BufferResource: GraphicsResource {
 }
 
 // Example concrete graphics resource: Shader
-public struct ShaderResource: GraphicsResource {
+public struct ShaderResource: ~Copyable, GraphicsResource {
     public var name: String?
     public var id: Int?
     public let graphicsType: GraphicsResourceType = .shader
@@ -38,19 +39,18 @@ public struct ShaderResource: GraphicsResource {
         // Implement Vulkan cleanup for shader module here
     }
 }
+*/
 import Foundation
 import Cvulkan
 
 /// Protocol for resources that are specifically related to graphics/GPU operations
-public protocol GraphicsResource: Resource {
-    var resourceType: ResourceType { get }
-
+public protocol GraphicsResource: Resource & ~Copyable {
     // GraphicsResource-specific
     var graphicsType: GraphicsResourceType { get }
 }
 
 public extension GraphicsResource {
-    var resourceType: ResourceType {
+    var resourceType: ResourceCategory {
         return .graphics(graphicsType)
     }
 }

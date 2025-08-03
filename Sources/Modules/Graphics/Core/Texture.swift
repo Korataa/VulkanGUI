@@ -1,7 +1,6 @@
 import Foundation
 import Cstb_image
 
-//Have to explicitly define ~Copyable because swift sucks (jk but pretty sure this is a compiler bug)
 public struct Texture: ~Copyable, GraphicsResource {
     public var name: String?
     private var _id: Int?
@@ -13,7 +12,8 @@ public struct Texture: ~Copyable, GraphicsResource {
         }
     }
 
-    public var resourceType: ResourceType { .graphics(.texture) }
+    public var graphicsType: GraphicsResourceType { .texture }
+    public var resourceType: ResourceCategory { .graphics(graphicsType) }
 
     public let width: Int
     public let height: Int

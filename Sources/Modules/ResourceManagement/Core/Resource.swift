@@ -9,14 +9,14 @@ public protocol Resource: ~Copyable {
     var id: Int? { get set }
     
     /// The type category of this resource
-    var resourceType: ResourceType { get }
+    var resourceType: ResourceCategory { get }
     
     /// Clean up any resources held by this resource
     func cleanup()
 }
 
 /// General resource type categories
-public enum ResourceType {
+public enum ResourceCategory {
     case graphics(GraphicsResourceType)  // Graphics/GPU resources
     case audio                          // Audio resources
     case data                          // Data/configuration resources

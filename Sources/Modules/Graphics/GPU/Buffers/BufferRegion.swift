@@ -9,18 +9,18 @@ public struct BufferRegion: ~Copyable {
     /// The size in bytes of this region
     public let size: Int
     
-    /// Reference to the actual GPU buffer this region belongs to
-    public let buffer: any GPUBuffer
+    /// Reference to the actual GPU buffer this region belongs to  
+    public let buffer: UnsafePointer<VulkanBuffer>
     
     /// Creates a new buffer region
     /// - Parameters:
     ///   - offset: Byte offset from start of buffer
     ///   - size: Size of region in bytes
     ///   - buffer: The GPU buffer this region belongs to
-    public init(offset: Int, size: Int, buffer: any GPUBuffer) {
+    public init(offset: Int, size: Int, buffer: borrowing VulkanBuffer) {
         self.offset = offset
         self.size = size
-        self.buffer = buffer
+        self.buffer = withUnsafePointer(to: buffer) { $0 }
     }
     
     /// The end offset of this region (exclusive)

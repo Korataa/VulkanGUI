@@ -16,7 +16,7 @@ public class VulkanShader: Shader {
         }
     }
     
-    public var resourceType: ResourceType {
+    public var resourceType: ResourceCategory {
         return .graphics(.shader)
     }
     
@@ -33,18 +33,18 @@ public class VulkanShader: Shader {
     private var descriptorSetLayouts: [VkDescriptorSetLayout?] = []
     private var descriptorPool: VkDescriptorPool?
     
-    // Transform resources (externally owned)
-    private var transformBuffer: VulkanBuffer
+    // Transform descriptor set (externally managed buffer)
     private var transformDescriptorSet: VkDescriptorSet?
     
     // Material binding (owned)
     private var materialBinding: MaterialShaderBinding?
     
+    private var descriptorSetsReady = false
+    
     // MARK: - Initialization
-    public init(device: VkDevice, vmaAllocator: VmaAllocator, transformBuffer: VulkanBuffer) {
+    public init(device: VkDevice, vmaAllocator: VmaAllocator) {
         self.device = device
         self.vmaAllocator = vmaAllocator
-        self.transformBuffer = transformBuffer
     }
     
     // MARK: - Resource Protocol
@@ -114,8 +114,13 @@ public class VulkanShader: Shader {
         // Create material binding
         materialBinding = MaterialShaderBinding(device: device, vmaAllocator: vmaAllocator)
         
-        // Allocate descriptor sets
-        try allocateDescriptorSets()
+        // Note: Descriptor sets should be allocated separately when buffer is available
+        // Call setupDescriptorSets(transformBuffer:) after creating the transform buffer
+    }
+    
+    public func setupDescriptorSets(transformBuffer: borrowing VulkanBuffer) throws {
+        try allocateDescriptorSets(transformBuffer: transformBuffer)
+        descriptorSetsReady = true
     }
     
     public func bind(commandBuffer: VkCommandBuffer) {
@@ -163,18 +168,19 @@ public class VulkanShader: Shader {
     }
     
     public func setTransform(model: Matrix4x4, view: Matrix4x4, projection: Matrix4x4) {
-        // Update transform buffer
-        withUnsafeBytes(of: model) { modelPtr in
-            withUnsafeBytes(of: view) { viewPtr in
-                withUnsafeBytes(of: projection) { projPtr in
-                    transformBuffer.uploadData(data: modelPtr.baseAddress!, size: MemoryLayout<Matrix4x4>.size, offset: 0)
-                    transformBuffer.uploadData(data: viewPtr.baseAddress!, size: MemoryLayout<Matrix4x4>.size, offset: MemoryLayout<Matrix4x4>.size)
-                    transformBuffer.uploadData(data: projPtr.baseAddress!, size: MemoryLayout<Matrix4x4>.size, offset: MemoryLayout<Matrix4x4>.size * 2)
-                }
-            }
+        // Note: Transform buffer upload should be handled externally
+        // Descriptor sets must be set up first via setupDescriptorSets(transformBuffer:)
+        if !descriptorSetsReady {
+            print("Warning: Descriptor sets not ready. Call setupDescriptorSets(transformBuffer:) first.")
+            return
         }
-        
-        updateTransformDescriptorSet()
+        // This method assumes descriptor sets were already set up with the buffer
+    }
+    
+    public func updateTransform(transformBuffer: borrowing VulkanBuffer) {
+        if descriptorSetsReady {
+            updateTransformDescriptorSet(transformBuffer: transformBuffer)
+        }
     }
     
     // MARK: - Private Methods
@@ -291,7 +297,7 @@ public class VulkanShader: Shader {
         }
     }
     
-    private func allocateDescriptorSets() throws {
+    private func allocateDescriptorSets(transformBuffer: borrowing VulkanBuffer) throws {
         // Allocate transform descriptor set
         var allocInfo = VkDescriptorSetAllocateInfo()
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
@@ -306,10 +312,10 @@ public class VulkanShader: Shader {
             }
         }
         
-        updateTransformDescriptorSet()
+        updateTransformDescriptorSet(transformBuffer: transformBuffer)
     }
     
-    private func updateTransformDescriptorSet() {
+    private func updateTransformDescriptorSet(transformBuffer: borrowing VulkanBuffer) {
         let transformDescriptorSet = transformDescriptorSet
         
         var bufferInfo = VkDescriptorBufferInfo()

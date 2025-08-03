@@ -2,25 +2,25 @@ import Foundation
 import Cvulkan
 import Cvma
 
-/// Manages graphics resources using ID-based tracking instead of direct storage
-/// This approach works with ~Copyable types by avoiding storage in collections
-public final class GraphicsResourceManager: ResourceManager {
-    public typealias ResourceType = any GraphicsResource
+/// Vulkan-specific resource manager
+/// Manages Vulkan buffers, textures, shaders, and other GPU resources with concrete types
+/// No generic abstractions - pure Vulkan implementation for maximum performance
+public final class VulkanResourceManager: ResourceManager {
 
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
 
-    // ID-based resource tracking - we don't store the resources themselves
-    //we do now
-    private var resources: DynamicArray<GraphicsResource> = DynamicArray()
+    // Direct storage of concrete Vulkan resources - no more 'any' types!
+    private var textures: DynamicArray<Texture> = DynamicArray(capacity: 10)
+    private var shaders: DynamicArray<VulkanShader> = DynamicArray(capacity: 10)
     private var nextResourceId: Int = 1
     private var activeResourceIds: Set<Int> = []
     
-    // Buffer management
-    public var staticVertexBuffer: GPUBuffer?
-    public var dynamicVertexBuffer: GPUBuffer?
-    public var transferBuffer: GPUBuffer?
-    public var indexBuffer: GPUBuffer?
+    // Buffer management - Vulkan-specific buffers
+    public var staticVertexBuffer: VulkanBuffer?
+    public var dynamicVertexBuffer: VulkanBuffer?
+    public var transferBuffer: VulkanBuffer?
+    public var indexBuffer: VulkanBuffer?
     
     // Memory tracking
     private let totalVRAM: UInt64         // Total GPU memory available
@@ -49,8 +49,8 @@ public final class GraphicsResourceManager: ResourceManager {
     }
     
     // MARK: - ResourceManager Protocol
-    public func canHandle(_ resourceType: ResourceType) -> Bool {
-        switch resourceType {
+    public func canHandle(_ typeCategory: ResourceCategory) -> Bool {
+        switch typeCategory {
         case .graphics(_):
             return true
         default:
@@ -58,34 +58,40 @@ public final class GraphicsResourceManager: ResourceManager {
         }
     }
     
-    /// Registers a resource and returns an ID for tracking
-    /// The resource ownership remains with the caller
-    public func addResource(_ resource: consuming ResourceType) -> Int {
-        // Validate that this is a graphics resource
-        switch resource.resourceType {
-        case .graphics(_):
-            break
-        default:
-            fatalError("GraphicsResourceManager can only handle GraphicsResource types")
-        }
-
+    // MARK: - Vulkan-Specific Resource Management
+    
+    /// Add a texture - concrete type, no abstractions!
+    public func addTexture(_ texture: consuming Texture) -> Int {
         let id = nextResourceId
         nextResourceId += 1
 
-        // Set the resource ID - this mutates the resource in place
-        var mutableResource = resource
-        mutableResource.id = id
+        var mutableTexture = texture
+        mutableTexture.id = id
 
-        // Store the resource in the DynamicArray
-        resources.append(mutableResource)
-
-        // Track the ID as active
+        textures.append(mutableTexture)
         activeResourceIds.insert(id)
 
-        // The resource is now owned by the manager, do not return it to the caller
-        // (no consume needed here)
+        return id
+    }
+    
+    /// Add a shader - concrete Vulkan shader type
+    public func addShader(_ shader: consuming VulkanShader) -> Int {
+        let id = nextResourceId
+        nextResourceId += 1
+
+        var mutableShader = shader
+        mutableShader.id = id
+
+        shaders.append(mutableShader)
+        activeResourceIds.insert(id)
 
         return id
+    }
+
+    /// Generic addResource for protocol conformance - simplified approach
+    public func addResource(_ resource: consuming any Resource) -> Int {
+        // For now, we'll require callers to use the specific methods
+        fatalError("VulkanResourceManager: Use addTexture() or addShader() instead of generic addResource()")
     }
     
     /// Remove a resource ID from tracking
@@ -94,12 +100,42 @@ public final class GraphicsResourceManager: ResourceManager {
         return activeResourceIds.remove(id) != nil
     }
     
-    /// Get a resource by ID - returns the stored GraphicsResource if present
-    public func getResource(_ id: Int) -> ResourceType? {
-        // IDs start at 1, so index is id-1
+    /// Safely access static vertex buffer handle
+    public borrowing func withStaticVertexBuffer<T>(_ body: (borrowing VulkanBuffer) throws -> T) rethrows -> T? {
+        guard staticVertexBuffer != nil else { return nil }
+        return try body(staticVertexBuffer!)
+    }
+    
+    /// Safely access dynamic vertex buffer handle
+    public borrowing func withDynamicVertexBuffer<T>(_ body: (borrowing VulkanBuffer) throws -> T) rethrows -> T? {
+        guard dynamicVertexBuffer != nil else { return nil }
+        return try body(dynamicVertexBuffer!)
+    }
+    
+    /// Safely access index buffer handle
+    public borrowing func withIndexBuffer<T>(_ body: (borrowing VulkanBuffer) throws -> T) rethrows -> T? {
+        guard indexBuffer != nil else { return nil }
+        return try body(indexBuffer!)
+    }
+    
+    /// Get a resource by ID - simplified for ~Copyable compatibility
+    public func getResource(_ id: Int) -> (any Resource)? {
+        // Due to ~Copyable limitations with 'any Resource', use specific methods instead
+        fatalError("VulkanResourceManager: Use getTexture() or getShader() instead of generic getResource()")
+    }
+    
+    /// Get texture by ID - consumes and returns the texture
+    public func consumeTexture(_ id: Int) -> Texture? {
         let index = id - 1
-        guard index >= 0 && index < resources.count else { return nil }
-        return resources[index]
+        guard index >= 0 && index < textures.count else { return nil }
+        return textures.consumeElement(at: index)
+    }
+    
+    /// Get shader by ID - consumes and returns the shader
+    public func consumeShader(_ id: Int) -> VulkanShader? {
+        let index = id - 1
+        guard index >= 0 && index < shaders.count else { return nil }
+        return shaders.consumeElement(at: index)
     }
     
     /// Remove a resource by ID (protocol conformance)
@@ -231,7 +267,7 @@ public final class GraphicsResourceManager: ResourceManager {
     public func allocateRegion(type: BufferType, size: Int) throws -> BufferRegion {
         switch type {
         case .staticVertex:
-            guard let buffer = staticVertexBuffer else {
+            guard staticVertexBuffer != nil else {
                 throw BufferError.bufferNotInitialized
             }
             try updateVRAMUsage(delta: Int64(size))
@@ -239,13 +275,13 @@ public final class GraphicsResourceManager: ResourceManager {
             let region = BufferRegion(
                 offset: staticVertexOffset,
                 size: size,
-                buffer: buffer
+                buffer: staticVertexBuffer!
             )
             staticVertexOffset += size
             return region
             
         case .dynamicVertex:
-            guard let buffer = dynamicVertexBuffer else {
+            guard dynamicVertexBuffer != nil else {
                 throw BufferError.bufferNotInitialized
             }
             try updateVRAMUsage(delta: Int64(size))
@@ -253,13 +289,13 @@ public final class GraphicsResourceManager: ResourceManager {
             let region = BufferRegion(
                 offset: dynamicVertexOffset,
                 size: size,
-                buffer: buffer
+                buffer: dynamicVertexBuffer!
             )
             dynamicVertexOffset += size
             return region
             
         case .index:
-            guard let buffer = indexBuffer else {
+            guard indexBuffer != nil else {
                 throw BufferError.bufferNotInitialized
             }
             try updateVRAMUsage(delta: Int64(size))
@@ -267,27 +303,27 @@ public final class GraphicsResourceManager: ResourceManager {
             let region = BufferRegion(
                 offset: indexOffset,
                 size: size,
-                buffer: buffer
+                buffer: indexBuffer!
             )
             indexOffset += size
             return region
             
         case .transfer:
-            guard let buffer = transferBuffer else {
+            guard transferBuffer != nil else {
                 throw BufferError.bufferNotInitialized
             }
             // Transfer buffer doesn't track offset since it's used for temporary operations
             return BufferRegion(
                 offset: 0,
                 size: size,
-                buffer: buffer
+                buffer: transferBuffer!
             )
         }
     }
     
     // MARK: - Vertex Buffer Management
     public func allocateStaticVertices<T>(vertices: [T]) throws -> BufferRegion {
-        guard let buffer = staticVertexBuffer else {
+        guard staticVertexBuffer != nil else {
             throw BufferError.bufferNotInitialized
         }
         
@@ -297,12 +333,12 @@ public final class GraphicsResourceManager: ResourceManager {
         let region = BufferRegion(
             offset: staticVertexOffset,
             size: size,
-            buffer: buffer
+            buffer: staticVertexBuffer!
         )
         
         // Upload vertices to buffer
         vertices.withUnsafeBufferPointer { ptr in
-            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: staticVertexOffset)
+            staticVertexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: staticVertexOffset)
         }
         
         staticVertexOffset += size
@@ -310,7 +346,7 @@ public final class GraphicsResourceManager: ResourceManager {
     }
     
     public func allocateDynamicVertices<T>(vertices: [T]) throws -> BufferRegion {
-        guard let buffer = dynamicVertexBuffer else {
+        guard dynamicVertexBuffer != nil else {
             throw BufferError.bufferNotInitialized
         }
         
@@ -320,12 +356,12 @@ public final class GraphicsResourceManager: ResourceManager {
         let region = BufferRegion(
             offset: dynamicVertexOffset,
             size: size,
-            buffer: buffer
+            buffer: dynamicVertexBuffer!
         )
         
         // Upload vertices to buffer
         vertices.withUnsafeBufferPointer { ptr in
-            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: dynamicVertexOffset)
+            dynamicVertexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: dynamicVertexOffset)
         }
         
         dynamicVertexOffset += size
@@ -333,7 +369,7 @@ public final class GraphicsResourceManager: ResourceManager {
     }
     
     public func allocateIndices(indices: [UInt32]) throws -> BufferRegion {
-        guard let buffer = indexBuffer else {
+        guard indexBuffer != nil else {
             throw BufferError.bufferNotInitialized
         }
         
@@ -343,12 +379,12 @@ public final class GraphicsResourceManager: ResourceManager {
         let region = BufferRegion(
             offset: indexOffset,
             size: size,
-            buffer: buffer
+            buffer: indexBuffer!
         )
         
         // Upload indices to buffer
         indices.withUnsafeBufferPointer { ptr in
-            buffer.uploadData(data: ptr.baseAddress!, size: size, offset: indexOffset)
+            indexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: indexOffset)
         }
         
         indexOffset += size

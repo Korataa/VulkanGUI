@@ -4,7 +4,9 @@ import PackageDescription
 
 var unsafeIncludeFlags = [""]
 #if os(Windows)
-    unsafeIncludeFlags = ["-IZ:\\dev\\vcpkg\\installed\\x64-windows\\include"]
+    // Allow override via environment variable, fallback to vcpkg default
+    let windowsIncludePath = ProcessInfo.processInfo.environment["VULKAN_SDK_INCLUDE"] ?? "Z:\\dev\\vcpkg\\installed\\x64-windows\\include"
+    unsafeIncludeFlags = ["-I\(windowsIncludePath)"]
 #else
     unsafeIncludeFlags = 
     [
@@ -14,9 +16,11 @@ var unsafeIncludeFlags = [""]
 
 var unsafeLibFlags = [""]
 #if os(Windows)
+    // Allow override via environment variable, fallback to vcpkg default
+    let windowsLibPath = ProcessInfo.processInfo.environment["VULKAN_SDK_LIB"] ?? "Z:\\dev\\vcpkg\\installed\\x64-windows\\lib"
     unsafeLibFlags = 
     [
-        "-LZ:\\dev\\vcpkg\\installed\\x64-windows\\lib",
+        "-L\(windowsLibPath)",
         "-lSDL3",
         "-lvulkan-1"
     ]
@@ -59,20 +63,27 @@ let package = Package(
             publicHeadersPath: "."
         ),
         .target(
+            name: "Cstb_image",
+            dependencies: [],
+            path: "Sources/ThirdParty/Cstb_image",
+            sources: ["stb_image.c"],
+            publicHeadersPath: "."
+        ),
+        .target(
             name: "Cvma",
             dependencies: ["Cvulkan"],
             path: "Sources/ThirdParty/Cvma",
             publicHeadersPath: "include",
             cxxSettings: [
-                .unsafeFlags(["-IZ:\\dev\\vcpkg\\installed\\x64-windows\\include"])
+                .unsafeFlags(unsafeIncludeFlags)
             ]
         ),
         .target(
             name: "Modules",
-            dependencies: ["CSDL3", "Cvulkan", "Cvma", "Cgltf"],
+            dependencies: ["CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image"],
             path: "Sources/Modules",
             cSettings: [
-                .unsafeFlags(["-IZ:\\dev\\vcpkg\\installed\\x64-windows\\include"])
+                .unsafeFlags(unsafeIncludeFlags)
             ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))

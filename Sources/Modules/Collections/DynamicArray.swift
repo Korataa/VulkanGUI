@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DynamicArray<T>: ~Copyable {
+public struct DynamicArray<T: ~Copyable>: ~Copyable {
     //UnsafeMutablePointer is just a pointer to a block of memory
     private var buffer: UnsafeMutableRawPointer?
     public private(set) var count: Int
@@ -28,8 +28,8 @@ public struct DynamicArray<T>: ~Copyable {
         self.buffer = UnsafeMutableRawPointer.allocate(byteCount: self.capacity * elementSize, alignment: MemoryLayout<T>.alignment)
     }
 
-    //handle non optional types
-    init(repeating defaultValue: T, count: UInt32) {
+    //handle non optional types - only available for copyable types
+    init(repeating defaultValue: T, count: UInt32) where T: Copyable {
         self.capacity = Int(count)
         if self.capacity <= 0 { self.capacity = 5 }
         self.count = Int(count)
@@ -42,7 +42,7 @@ public struct DynamicArray<T>: ~Copyable {
         self.buffer?.initializeMemory(as: T.self, repeating: defaultValue, count: self.capacity)
     }
 
-    init(_ elements: T...) {
+    init(_ elements: T...) where T: Copyable {
         self.capacity = max(elements.count, 10)
         self.count = elements.count
         self.elementSize = MemoryLayout<T>.size
@@ -67,7 +67,7 @@ public struct DynamicArray<T>: ~Copyable {
         }
     }
 
-    mutating func append(_ element: T) {
+    mutating func append(_ element: consuming T) {
         if count == capacity {
             doubleCapacity()
         }
@@ -85,20 +85,18 @@ public struct DynamicArray<T>: ~Copyable {
             fatalError("Index is out of bounds!!")
         }
 
-        //get the element at the specified index
+        //get the element at the specified index by moving it out
         let pointer = buffer?.advanced(by: index * elementSize).assumingMemoryBound(to: T.self)
-        let element = pointer!.pointee
+        let element = pointer!.move()
 
         //shift all elements after the removed index
         for i in index..<count - 1 {
             let from = buffer?.advanced(by: (i + 1) * elementSize).assumingMemoryBound(to: T.self)
             let to = buffer?.advanced(by: i * elementSize).assumingMemoryBound(to: T.self)
-            to?.initialize(to: from!.pointee)
+            to?.initialize(to: from!.move())
         }
 
-        //deinitialize the last element and reduce the count
-        let lastPointer = buffer?.advanced(by: (count - 1) * elementSize).assumingMemoryBound(to: T.self)
-        lastPointer?.deinitialize(count: 1)
+        //the last element was already moved, just reduce the count
         count -= 1
         
         return element
@@ -147,9 +145,7 @@ public struct DynamicArray<T>: ~Copyable {
                     let oldPointer = buffer.advanced(by: index * elementSize).assumingMemoryBound(to: T.self)
 
                     let newPointer = newBuffer.advanced(by: index * elementSize).assumingMemoryBound(to: T.self)
-                    newPointer.initialize(to: oldPointer.pointee)
-
-                    oldPointer.deinitialize(count: 1)
+                    newPointer.initialize(to: oldPointer.move())
                 }
             }
 
@@ -190,12 +186,12 @@ public struct DynamicArray<T>: ~Copyable {
         }
     }
 
-    func first() -> T? {
+    func first() -> T? where T: Copyable {
         guard let _ = buffer, !isEmpty() else { return nil }
         return self[0]
     }
 
-    func last() -> T? {
+    func last() -> T? where T: Copyable {
         guard let _ = buffer, !isEmpty() else { return nil }
         return self[count - 1]
     }

@@ -1,6 +1,6 @@
 import Cvulkan
 
-public protocol GPUBuffer: GraphicsResource {
+public protocol GPUBuffer: ~Copyable, GraphicsResource {
     /// The handle to the underlying GPU buffer, which can be used for operations like binding or copying.
     var bufferHandle: GPUBufferHandle { get } // This can be a Vulkan buffer, DirectX buffer, etc.
 

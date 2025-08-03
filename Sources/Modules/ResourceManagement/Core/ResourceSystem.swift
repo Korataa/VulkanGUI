@@ -5,12 +5,12 @@ import Cvma
 /// Orchestrates different specialized resource managers
 public class ResourceSystem {
     // The specialized resource managers
-    public private(set) var graphicsResourceManager: GraphicsResourceManager
+    public private(set) var graphicsResourceManager: VulkanResourceManager
     private var managers: [String: Any] = [:]  // Store other specialized managers
     
     // MARK: - Initialization
     public init(device: VkDevice, vmaAllocator: VmaAllocator, totalVRAM: UInt64) {
-        self.graphicsResourceManager = GraphicsResourceManager(
+        self.graphicsResourceManager = VulkanResourceManager(
             device: device,
             vmaAllocator: vmaAllocator, 
             totalVRAM: totalVRAM
@@ -61,7 +61,7 @@ public class ResourceSystem {
         return nil
     }
     
-    public func removeResource(_ id: Int, resourceType: ResourceType) {
+    public func removeResource(_ id: Int, resourceType: ResourceCategory) {
         // Try graphics manager first
         if graphicsResourceManager.canHandle(resourceType) {
             graphicsResourceManager.removeResource(id)

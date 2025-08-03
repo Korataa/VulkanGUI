@@ -35,7 +35,7 @@ class VulkanRenderer {
     var sdlContext: SDLContext
     var windowHandle: OpaquePointer? = nil
 
-    private var resourceManager: GraphicsResourceManager? = nil
+    private var resourceManager: VulkanResourceManager? = nil
     var camera: Camera! // Add camera
 
     var instance: VkInstance? = nil
@@ -282,7 +282,7 @@ same here 0       1
         createSyncObjects()
     }
 
-    func setResourceManager(_ resourceManager: GraphicsResourceManager) {
+    func setResourceManager(_ resourceManager: VulkanResourceManager) {
         self.resourceManager = resourceManager
     }
 
@@ -1942,10 +1942,15 @@ same here 0       1
     }
 
     func render(models: [Model]) {
-        //get buffer handles when needed
-        guard let staticBuffer = resourceManager?.staticVertexBuffer,
-              let dynamicBuffer = resourceManager?.dynamicVertexBuffer,
-              let indexBuffer = resourceManager?.indexBuffer else {
+        // Check if resource manager and buffers are available
+        guard let resourceManager = resourceManager else {
+            return
+        }
+        
+        // Use borrowing to access buffers safely
+        guard resourceManager.staticVertexBuffer != nil,
+              resourceManager.dynamicVertexBuffer != nil,
+              resourceManager.indexBuffer != nil else {
             return
         }
 
@@ -1963,12 +1968,16 @@ same here 0       1
         
         for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
-            let vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
-            let offsets = DynamicArray<VkDeviceSize>(0)
-            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
+            resourceManager.withStaticVertexBuffer { staticBuffer in
+                let vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
+                let offsets = DynamicArray<VkDeviceSize>(0)
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
+            }
 
             //bind index buffer
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
+            resourceManager.withIndexBuffer { indexBuffer in
+                vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
+            }
 
             // Update transform UBO once per model
             let transformOffset = currentTransformIndex * Int(transformAlignment)
@@ -2027,13 +2036,17 @@ same here 0       1
         //for dynamic meshes
         for model in sortedModels where model.isDynamic && model.isVisible(in: frustum) {
             // bind dynamic vertex buffer
-            let vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
-            let offsets = DynamicArray<VkDeviceSize>(0)
-            vkCmdBindVertexBuffers(commandBuffer!, 0, 1, vertexBuffers.getData(), offsets.getData())
+            resourceManager.withDynamicVertexBuffer { dynamicBuffer in
+                let vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
+                let offsets = DynamicArray<VkDeviceSize>(0)
+                vkCmdBindVertexBuffers(commandBuffer!, 0, 1, vertexBuffers.getData(), offsets.getData())
+            }
 
             //bind index buffer (only if needed)
             if !model.meshes.isEmpty {
-                vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
+                resourceManager.withIndexBuffer { indexBuffer in
+                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
+                }
             }
 
             // Update transform UBO once per model

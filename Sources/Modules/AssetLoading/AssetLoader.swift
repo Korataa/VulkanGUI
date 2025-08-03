@@ -20,9 +20,9 @@ public struct LoadedModel {
 }
 
 public class AssetLoader {
-    private let resourceManager: GraphicsResourceManager
-
-    public init(resourceManager: GraphicsResourceManager) {
+    private let resourceManager: VulkanResourceManager
+    
+    public init(resourceManager: VulkanResourceManager) {
         self.resourceManager = resourceManager
     }
 
@@ -62,7 +62,7 @@ public class AssetLoader {
                 var texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
                 
                 // Register texture with resource manager and get ID using explicit move
-                let textureId = resourceManager.addResource(consume texture)
+                let textureId = resourceManager.addTexture(consume texture)
                 textureStorage.addTextureId(textureId, width: Int(width), height: Int(height), channels: Int(channels))
             }
         }
@@ -253,7 +253,7 @@ public class AssetLoader {
                     
                     // Upload the data
                     vertices.withUnsafeBytes { vertexBytes in
-                        vertexRegion.buffer.uploadData(
+                        vertexRegion.buffer.pointee.uploadData(
                             data: vertexBytes.baseAddress!,
                             size: vertexBytes.count,
                             offset: vertexRegion.offset
@@ -261,7 +261,7 @@ public class AssetLoader {
                     }
                     
                     indices.withUnsafeBytes { indexBytes in
-                        indexRegion.buffer.uploadData(
+                        indexRegion.buffer.pointee.uploadData(
                             data: indexBytes.baseAddress!,
                             size: indexBytes.count,
                             offset: indexRegion.offset

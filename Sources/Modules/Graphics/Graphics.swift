@@ -7,7 +7,7 @@ public class Graphics {
         public let device: VkDevice
         public let vmaAllocator: VmaAllocator
         public let totalVRAM: UInt64
-        public let graphicsResourceManager: GraphicsResourceManager
+        public let graphicsResourceManager: VulkanResourceManager
     }
 
     public func getResourceSystemInfo() -> ResourceSystemInfo? {
@@ -26,10 +26,10 @@ public class Graphics {
     private var renderer: VulkanRenderer
     private var sdlContext: SDLContext
 
-    var graphicsResourceManager: GraphicsResourceManager?
+    var graphicsResourceManager: VulkanResourceManager?
     
     // Public accessor for the resource manager
-    public var resourceManager: GraphicsResourceManager {
+    public var resourceManager: VulkanResourceManager {
         return graphicsResourceManager!
     }
 
@@ -42,7 +42,7 @@ public class Graphics {
         renderer.initialize()
     }
 
-    public init(sdlContext: SDLContext, graphicsResourceManager: GraphicsResourceManager) {
+    public init(sdlContext: SDLContext, graphicsResourceManager: VulkanResourceManager) {
         self.sdlContext = sdlContext
         renderer = VulkanRenderer(context: sdlContext)
         renderer.initialize()

@@ -22,7 +22,8 @@ public struct MaterialData {
 }
 
 /// Handles uploading material data to GPU memory and managing its lifecycle
-public final class MaterialUploader {
+/// Vulkan-specific implementation for maximum performance
+public final class VulkanMaterialUploader {
     private let buffer: VulkanBuffer
     
     public init(vmaAllocator: VmaAllocator) {
@@ -34,9 +35,6 @@ public final class MaterialUploader {
             isDynamic: false
         )
     }
-    
-    /// Access the underlying buffer for binding in render commands
-    public var gpuBuffer: GPUBuffer { buffer }
     
     /// Update GPU memory with new material data
     public func update(from material: Material) {

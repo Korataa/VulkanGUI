@@ -5,13 +5,13 @@ import Cvma
 /// Manages the connection between Materials and their shader representation
 public class MaterialShaderBinding {
     private let device: VkDevice
-    private let materialUploader: MaterialUploader
+    private let materialUploader: VulkanMaterialUploader
     private var descriptorSetLayout: VkDescriptorSetLayout?
     private var descriptorSet: VkDescriptorSet?
     
     init(device: VkDevice, vmaAllocator: VmaAllocator) {
         self.device = device
-        self.materialUploader = MaterialUploader(vmaAllocator: vmaAllocator)
+        self.materialUploader = VulkanMaterialUploader(vmaAllocator: vmaAllocator)
         createDescriptorSetLayout()
     }
     
