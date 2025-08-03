@@ -258,6 +258,7 @@ same here 0       1
         setupDebugMessenger()
         createSurface()
         pickPhysicalDevice()
+        calculateAlignment()  // Calculate buffer alignments after physical device is selected
         createLogicalDevice()
         //Maybe create allocator here?
         setupVmaAllocator()
@@ -1382,8 +1383,8 @@ same here 0       1
             fatalError("Cant get assets path!")
         }
 
-        let vertShaderPath: String = "\(assetsPath)\\Shaders\\vert.spv"
-        let fragShaderPath: String = "\(assetsPath)\\Shaders\\frag.spv"
+        let vertShaderPath: String = "\(assetsPath)/Shaders/vert.spv"
+        let fragShaderPath: String = "\(assetsPath)/Shaders/frag.spv"
 
         print("vertShaderPath is: \(vertShaderPath)")
 
@@ -1840,11 +1841,23 @@ same here 0       1
         print("Material UBO entry uses \(materialAlignment) bytes")
     }
 
+    private var transformDebugCounter = 0
+    
     func updateTransformUBO(at offset: Int, transform: Transform) {
         var constants = TransformConstants(
             modelMatrix: transform.modelMatrix,
             normalMatrix: transform.normalMatrix
         )
+        
+        // Debug: Print the model matrix being sent to the shader
+        transformDebugCounter += 1
+        if transformDebugCounter <= 3 {  // Only print first few transforms
+            print("DEBUG: Transform \(transformDebugCounter) model matrix:")
+            print("  Position: \(transform.position)")
+            print("  Rotation: \(transform.rotation)")
+            print("  Scale: \(transform.scale)")
+            print("  Model matrix: \(transform.modelMatrix)")
+        }
 
         var dataPtr: UnsafeMutableRawPointer?
         let result = vmaMapMemory(vmaAllocator!, transformUBOMemory!, &dataPtr)
@@ -1861,8 +1874,11 @@ same here 0       1
     func updateMaterialUBO(at offset: Int, materialID: UInt32) {
         var constants = MaterialConstants(
             materialID: materialID
-            // Other material properties will be set to defaults from struct definition
         )
+        // For now, set a bright white color to ensure visibility
+        constants.baseColor = Vector4(1.0, 1.0, 1.0, 1.0)
+        
+        print("DEBUG: Uploading material \(materialID) at offset \(offset) with baseColor: \(constants.baseColor)")
 
         var dataPtr: UnsafeMutableRawPointer?
         let result = vmaMapMemory(vmaAllocator!, materialUBOMemory!, &dataPtr)
@@ -1941,6 +1957,39 @@ same here 0       1
 
     }
 
+    private var debugFrameCount = 0
+    
+    private func updateFrameUBO() {
+        // Create frame constants with current camera data
+        var frameConstants = FrameConstants(
+            viewMatrix: camera.viewMatrix,
+            projectionMatrix: camera.projectionMatrix,
+            cameraPosition: camera.position,
+            time: 0.0, // TODO: Add time tracking if needed
+            lightPosition: Vector3(5.0, 5.0, 5.0), // Default light position
+            lightColor: Vector3(1.0, 1.0, 1.0),    // White light
+            ambientColor: Vector3(0.1, 0.1, 0.1)   // Dark ambient
+        )
+        
+        // Debug: Print camera matrices (only once per few frames to avoid spam)
+        debugFrameCount += 1
+        if debugFrameCount % 60 == 0 {
+            print("Camera position: \(camera.position)")
+            print("View matrix: \(camera.viewMatrix)")
+            print("Projection matrix: \(camera.projectionMatrix)")
+        }
+        
+        // Map the frame UBO memory and copy data
+        var mappedMemory: UnsafeMutableRawPointer?
+        let result = vmaMapMemory(vmaAllocator!, frameUBOMemory!, &mappedMemory)
+        if result == VK_SUCCESS {
+            withUnsafeBytes(of: &frameConstants) { bytes in
+                mappedMemory!.copyMemory(from: bytes.baseAddress!, byteCount: MemoryLayout<FrameConstants>.stride)
+            }
+            vmaUnmapMemory(vmaAllocator!, frameUBOMemory!)
+        }
+    }
+
     func render(models: [Model]) {
         // Check if resource manager and buffers are available
         guard let resourceManager = resourceManager else {
@@ -1954,6 +2003,9 @@ same here 0       1
             return
         }
 
+        // Update camera matrices in the frame UBO
+        updateFrameUBO()
+
         //Calculate the view frustum for culling
         let frustum = calculateViewFrustum(projectionMatrix: camera.projectionMatrix, viewMatrix: camera.viewMatrix)
 
@@ -1965,6 +2017,19 @@ same here 0       1
         //for static meshes
         var currentMaterialID: UInt32 = UInt32.max
         var currentTransformIndex: Int = 0
+        
+        print("DEBUG: Processing \(sortedModels.count) sorted models")
+        for (i, model) in sortedModels.enumerated() {
+            let isDynamic = model.isDynamic
+            let isVisible = model.isVisible(in: frustum)
+            print("  Model \(i): isDynamic=\(isDynamic), isVisible=\(isVisible), meshes=\(model.meshes.count)")
+            
+            if !isDynamic && isVisible {
+                print("    -> Model \(i) WILL BE RENDERED")
+            } else {
+                print("    -> Model \(i) SKIPPED (isDynamic=\(isDynamic), isVisible=\(isVisible))")
+            }
+        }
         
         for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
@@ -2017,6 +2082,7 @@ same here 0       1
                 }
 
                 //Draw
+                print("DEBUG: Drawing STATIC mesh: indexCount=\(mesh.indexCount), indexOffset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
                 vkCmdDrawIndexed(
                     commandBuffer!,
                     UInt32(mesh.indexCount),    // Number of indices
@@ -2173,7 +2239,7 @@ same here 0       1
         renderPassInfo.renderArea.offset = VkOffset2D(x: 0, y: 0)
         renderPassInfo.renderArea.extent = swapchainExtent!
 
-        var clearColor = VkClearValue(color: VkClearColorValue(float32: (0.0, 0.0, 0.0, 1.0)))
+        var clearColor = VkClearValue(color: VkClearColorValue(float32: (0.1, 0.2, 0.3, 1.0)))
         renderPassInfo.clearValueCount = 1
         withUnsafePointer(to: &clearColor) { ptr in
             renderPassInfo.pClearValues = ptr

@@ -9,13 +9,20 @@ public class ResourceSystem {
     private var managers: [String: Any] = [:]  // Store other specialized managers
     
     // MARK: - Initialization
+    
+    /// Initialize ResourceSystem with an already-created graphics resource manager
+    /// The Graphics system should create the VulkanResourceManager with proper Vulkan context
+    /// and pass it to ResourceSystem for high-level orchestration
+    public init(graphicsResourceManager: VulkanResourceManager) {
+        self.graphicsResourceManager = graphicsResourceManager
+    }
+    
+    /// Legacy constructor for compatibility - creates its own VulkanResourceManager
+    /// This should be avoided in favor of passing a properly configured one from Graphics
+    @available(*, deprecated, message: "Use init(graphicsResourceManager:) instead")
     public init(device: VkDevice, vmaAllocator: VmaAllocator, totalVRAM: UInt64) {
-        self.graphicsResourceManager = VulkanResourceManager(
-            device: device,
-            vmaAllocator: vmaAllocator, 
-            totalVRAM: totalVRAM
-        )
-        try? self.graphicsResourceManager.initialize()
+        // This creates a VulkanResourceManager without transfer context - not optimal!
+        fatalError("This constructor is deprecated. Graphics should create VulkanResourceManager and pass it to ResourceSystem")
     }
     
     // MARK: - Manager Registration

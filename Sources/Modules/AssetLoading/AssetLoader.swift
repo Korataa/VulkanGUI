@@ -76,10 +76,10 @@ public class AssetLoader {
             //Fill in pbr properties
             let pbr = mat.pbr_metallic_roughness
             material.baseColor = Color(
-                pbr.base_color_factor.0,
-                pbr.base_color_factor.1,
-                pbr.base_color_factor.2,
-                pbr.base_color_factor.3
+                pbr.base_color_factor.0 * 255.0,
+                pbr.base_color_factor.1 * 255.0,
+                pbr.base_color_factor.2 * 255.0,
+                pbr.base_color_factor.3 * 255.0
             )
             material.metallicFactor = pbr.metallic_factor
             material.roughnessFactor = pbr.roughness_factor
@@ -120,14 +120,28 @@ public class AssetLoader {
             materials.append(material)
         }
 
-        // --- 5. Load node transforms ---
+        // --- 5. Load node transforms (not used currently) ---
         var nodeTransforms: [Matrix4x4] = []
         for i in 0..<dataVal.nodes_count {
             let node = dataVal.nodes[i]
-            nodeTransforms.append(nodeToMatrix(node))
+            let transform = nodeToMatrix(node)
+            nodeTransforms.append(transform)
         }
 
-        // --- 6. (Finally) load mesh data and upload to buffers ---
+        // --- 6. Process scene nodes to find node-to-mesh mapping ---
+        var nodeMeshMap: [Int: [Int]] = [:]  // node index -> [mesh indices]
+        for i in 0..<dataVal.nodes_count {
+            let node = dataVal.nodes[i]
+            if node.mesh != nil {
+                let meshIndex = Int(node.mesh - dataVal.meshes)
+                if nodeMeshMap[i] == nil {
+                    nodeMeshMap[i] = []
+                }
+                nodeMeshMap[i]?.append(meshIndex)
+            }
+        }
+
+        // --- 7. (Finally) load mesh data and upload to buffers ---
         guard resourceManager.staticVertexBuffer != nil,
               resourceManager.indexBuffer != nil else {
                 if resourceManager.staticVertexBuffer == nil {
@@ -144,6 +158,7 @@ public class AssetLoader {
 
         for i in 0..<dataVal.meshes_count {
             let mesh = dataVal.meshes[i]
+            
             for j in 0..<mesh.primitives_count {
                 let prim = mesh.primitives[j]
 
@@ -202,9 +217,11 @@ public class AssetLoader {
                     let pos = positions[v]
                     let norm = v < normals.count ? normals[v] : SIMD3<Float>(0, 0, 0)
                     let uv = v < texCoords.count ? texCoords[v] : SIMD2<Float>(0, 0)
+                    
+                    // DON'T apply node transform for now - let's see the raw model
                     vertices.append(Vertex3D(position: pos, normal: norm, texCoord: uv))
                     
-                    // Update bounds
+                    // Update bounds with original position  
                     let vertexPos = Vector3(pos.x, pos.y, pos.z)
                     minBounds = Vector3(
                         min(minBounds.x, vertexPos.x),
@@ -242,31 +259,9 @@ public class AssetLoader {
 
                 // --- Upload to buffers and create mesh descriptor ---
                 do {
-                    let vertexRegion = try resourceManager.allocateRegion(
-                        type: .staticVertex, 
-                        size: vertices.count * MemoryLayout<Vertex3D>.stride
-                    )
-                    let indexRegion = try resourceManager.allocateRegion(
-                        type: .index, 
-                        size: indices.count * MemoryLayout<UInt32>.stride
-                    )
-                    
-                    // Upload the data
-                    vertices.withUnsafeBytes { vertexBytes in
-                        vertexRegion.buffer.pointee.uploadData(
-                            data: vertexBytes.baseAddress!,
-                            size: vertexBytes.count,
-                            offset: vertexRegion.offset
-                        )
-                    }
-                    
-                    indices.withUnsafeBytes { indexBytes in
-                        indexRegion.buffer.pointee.uploadData(
-                            data: indexBytes.baseAddress!,
-                            size: indexBytes.count,
-                            offset: indexRegion.offset
-                        )
-                    }
+                    // Use high-performance staging buffer uploads via VulkanResourceManager
+                    let vertexRegion = try resourceManager.allocateStaticVertices(vertices: vertices)
+                    let indexRegion = try resourceManager.allocateIndices(indices: indices)
                 
                     meshes.append(LoadedMesh(
                         vertexOffset: vertexRegion.offset,
@@ -329,7 +324,7 @@ func nodeToMatrix(_ node: cgltf_node) -> Matrix4x4 {
         //Node has a direct 4x4 matrix
         let m = node.matrix
         return Matrix4x4(
-            m.1, m.1, m.2, m.3,
+            m.0, m.1, m.2, m.3,
             m.4, m.5, m.6, m.7,
             m.8, m.9, m.10, m.11,
             m.12, m.13, m.14, m.15

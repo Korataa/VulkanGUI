@@ -72,6 +72,15 @@ public struct Matrix3x3 {
         [c0, c1, c2]
     }
 
+    // Matrix-vector multiplication
+    public static func *(lhs: Matrix3x3, rhs: SIMD3<Float>) -> SIMD3<Float> {
+        return SIMD3<Float>(
+            dot(lhs.row(0), rhs),
+            dot(lhs.row(1), rhs),
+            dot(lhs.row(2), rhs)
+        )
+    }
+
     public subscript(index: Int) -> SIMD3<Float> {
         get {
             switch index {
@@ -153,6 +162,16 @@ public struct Matrix4x4 {
             ))
         }
         return Matrix4x4(result[0], result[1], result[2], result[3])
+    }
+
+    // Matrix-vector multiplication
+    public static func *(lhs: Matrix4x4, rhs: SIMD4<Float>) -> SIMD4<Float> {
+        return SIMD4<Float>(
+            dot(lhs.row(0), rhs),
+            dot(lhs.row(1), rhs),
+            dot(lhs.row(2), rhs),
+            dot(lhs.row(3), rhs)
+        )
     }
 
     private static func dot(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float {
@@ -427,12 +446,12 @@ public struct Quaternion {
     var simd: SIMD4<Float>
 
     public init(_ w: Float, _ x: Float, _ y: Float, _ z: Float) {
-        simd = SIMD4(w, x, y, z)
+        simd = SIMD4(x, y, z, w)  // SIMD4 stores as [x, y, z, w]
     }
 
     //just in case someone wants to use the labels
     public init(w: Float, x: Float, y: Float, z: Float) {
-        simd = SIMD4(w, x, y, z)
+        simd = SIMD4(x, y, z, w)  // SIMD4 stores as [x, y, z, w]
     }
 
     public var w: Float {

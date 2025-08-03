@@ -9,6 +9,8 @@ public final class VulkanResourceManager: ResourceManager {
 
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
+    private let transferCommandPool: VkCommandPool
+    private let transferQueue: VkQueue
 
     // Direct storage of concrete Vulkan resources - no more 'any' types!
     private var textures: DynamicArray<Texture> = DynamicArray(capacity: 10)
@@ -41,11 +43,13 @@ public final class VulkanResourceManager: ResourceManager {
     // Growth threshold - when to increase available VRAM (80% of current available)
     private let growthThreshold: Double = 0.8
     
-    public init(device: VkDevice, vmaAllocator: VmaAllocator, totalVRAM: UInt64) {
+    public init(device: VkDevice, vmaAllocator: VmaAllocator, totalVRAM: UInt64, transferCommandPool: VkCommandPool, transferQueue: VkQueue) {
         self.device = device
         self.vmaAllocator = vmaAllocator
         self.totalVRAM = totalVRAM
         self.availableVRAM = totalVRAM / 10  // Start with 10% of total VRAM
+        self.transferCommandPool = transferCommandPool
+        self.transferQueue = transferQueue
     }
     
     // MARK: - ResourceManager Protocol
@@ -217,7 +221,7 @@ public final class VulkanResourceManager: ResourceManager {
         staticVertexBuffer = VulkanBuffer(
             vmaAllocator: vmaAllocator,
             size: size,
-            usage: .Vertex,
+            usage: [.Vertex, .TransferDst],  // Add TransferDst for staging buffer uploads
             properties: .GPULocal
         )
         staticVertexOffset = 0
@@ -239,7 +243,7 @@ public final class VulkanResourceManager: ResourceManager {
         indexBuffer = VulkanBuffer(
             vmaAllocator: vmaAllocator,
             size: size,
-            usage: .Index,
+            usage: [.Index, .TransferDst],  // Add TransferDst for staging buffer uploads
             properties: .GPULocal
         )
         indexOffset = 0
@@ -336,10 +340,8 @@ public final class VulkanResourceManager: ResourceManager {
             buffer: staticVertexBuffer!
         )
         
-        // Upload vertices to buffer
-        vertices.withUnsafeBufferPointer { ptr in
-            staticVertexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: staticVertexOffset)
-        }
+        // Use high-performance staging buffer upload instead of direct upload
+        try uploadToGPUBuffer(data: vertices, destinationBuffer: staticVertexBuffer!, destinationOffset: staticVertexOffset)
         
         staticVertexOffset += size
         return region
@@ -359,10 +361,8 @@ public final class VulkanResourceManager: ResourceManager {
             buffer: dynamicVertexBuffer!
         )
         
-        // Upload vertices to buffer
-        vertices.withUnsafeBufferPointer { ptr in
-            dynamicVertexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: dynamicVertexOffset)
-        }
+        // Use high-performance staging buffer upload instead of direct upload
+        try uploadToGPUBuffer(data: vertices, destinationBuffer: dynamicVertexBuffer!, destinationOffset: dynamicVertexOffset)
         
         dynamicVertexOffset += size
         return region
@@ -382,13 +382,63 @@ public final class VulkanResourceManager: ResourceManager {
             buffer: indexBuffer!
         )
         
-        // Upload indices to buffer
-        indices.withUnsafeBufferPointer { ptr in
-            indexBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: indexOffset)
-        }
+        // Use high-performance staging buffer upload instead of direct upload
+        try uploadToGPUBuffer(data: indices, destinationBuffer: indexBuffer!, destinationOffset: indexOffset)
         
         indexOffset += size
         return region
+    }
+    
+    // MARK: - High-Performance Staging Buffer Upload
+    
+    /// High-performance upload to GPU-local buffers using staging buffer
+    /// This is the most efficient way to get data to GPU memory
+    private func uploadToGPUBuffer<T>(data: [T], destinationBuffer: borrowing VulkanBuffer, destinationOffset: Int) throws {
+        let size = data.count * MemoryLayout<T>.stride
+        
+        // Ensure we have a staging buffer
+        if transferBuffer == nil {
+            try createTransferBuffer()
+        }
+        
+        guard transferBuffer != nil else {
+            throw BufferError.bufferNotInitialized
+        }
+        
+        // Upload data to staging buffer (host-visible)
+        data.withUnsafeBufferPointer { ptr in
+            transferBuffer!.uploadData(data: ptr.baseAddress!, size: size, offset: 0)
+        }
+        
+        // Copy from staging buffer to GPU buffer (most efficient transfer)
+        // TODO: This needs the actual Vulkan device/queue context to perform the copy
+        // For now, we'll need to provide these via the renderer
+        copyBufferToGPU(
+            source: transferBuffer!,
+            destination: destinationBuffer,
+            size: size,
+            sourceOffset: 0,
+            destinationOffset: destinationOffset
+        )
+    }
+    
+    /// Performs the actual GPU copy operation using VulkanBuffer's optimized copyTo method
+    private func copyBufferToGPU(
+        source: borrowing VulkanBuffer,
+        destination: borrowing VulkanBuffer,
+        size: Int,
+        sourceOffset: Int,
+        destinationOffset: Int
+    ) {
+        // Use VulkanBuffer's high-performance copyTo method
+        // This creates an optimal command buffer and submits it to the transfer queue
+        source.copyTo(
+            dstBuffer: destination,
+            size: VkDeviceSize(size),
+            transferCommandPool: transferCommandPool,
+            transferQueue: transferQueue,
+            logicalDevice: device
+        )
     }
     
     // MARK: - Memory Information

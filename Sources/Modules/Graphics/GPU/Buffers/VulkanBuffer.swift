@@ -17,11 +17,13 @@ public struct VulkanBuffer: ~Copyable, GPUBuffer {
     let vmaAllocator: VmaAllocator
     public let size: UInt64
     public let usage: GPUBufferUsage
+    private let memoryProperties: GPUMemoryProperties // Store the memory properties
 
     init(vmaAllocator: VmaAllocator, size: UInt64, usage: GPUBufferUsage, properties: GPUMemoryProperties, isDynamic: Bool = false) {
         self.size = size
         self.usage = usage
         self.vmaAllocator = vmaAllocator
+        self.memoryProperties = properties // Store the properties
 
         var buffer: VkBuffer?
         var allocation: VmaAllocation?
@@ -62,6 +64,20 @@ public struct VulkanBuffer: ~Copyable, GPUBuffer {
     }
 
     public func uploadData(data: UnsafeRawPointer, size: Int, offset: Int = 0) {
+        // Safety check: Prevent direct uploads to GPU-local-only buffers
+        if memoryProperties.contains(.GPULocal) && !memoryProperties.contains(.CPUVisible) {
+            fatalError("""
+                Attempted to directly upload data to a GPU-local buffer that is not CPU-visible!
+                Buffer usage: \(usage)
+                Memory properties: \(memoryProperties)
+                
+                GPU-local buffers must be uploaded using staging buffers:
+                1. Create a staging buffer with .GPUUpload properties
+                2. Upload data to staging buffer
+                3. Copy from staging buffer to GPU buffer using copyTo() or moveTo()
+                """)
+        }
+        
         guard size <= self.size else {
             fatalError("Data size (\(size)) plus offset (\(offset)) exceeds buffer size (\(self.size))")
         }
