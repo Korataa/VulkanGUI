@@ -1475,8 +1475,8 @@ same here 0       1
         rasterizerInfo.rasterizerDiscardEnable = VK_FALSE
         rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL
         rasterizerInfo.lineWidth = 1.0
-        rasterizerInfo.cullMode = UInt32(VK_CULL_MODE_BACK_BIT.rawValue)
-        rasterizerInfo.frontFace = VK_FRONT_FACE_CLOCKWISE
+        rasterizerInfo.cullMode = UInt32(VK_CULL_MODE_NONE.rawValue)  // Disable culling temporarily
+        rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE  // glTF standard
         rasterizerInfo.depthBiasEnable = VK_FALSE
 
         var multisamplingInfo = VkPipelineMultisampleStateCreateInfo()
@@ -2082,13 +2082,14 @@ same here 0       1
                 }
 
                 //Draw
-                print("DEBUG: Drawing STATIC mesh: indexCount=\(mesh.indexCount), indexOffset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
+                let vertexOffsetInVertices = mesh.vertexOffset / MemoryLayout<Vertex3D>.stride
+                print("DEBUG: Drawing STATIC mesh: indexCount=\(mesh.indexCount), indexOffset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset) bytes -> \(vertexOffsetInVertices) vertices")
                 vkCmdDrawIndexed(
                     commandBuffer!,
                     UInt32(mesh.indexCount),    // Number of indices
                     1,                          // Instance count
                     UInt32(mesh.indexOffset),   // First index
-                    Int32(mesh.vertexOffset),   // Vertex offset
+                    Int32(vertexOffsetInVertices), // Vertex offset (in vertices, not bytes)
                     0                           // First instance
                 )
             }
@@ -2153,12 +2154,13 @@ same here 0       1
                 }
 
                 //Draw
+                let vertexOffsetInVertices = mesh.vertexOffset / MemoryLayout<Vertex3D>.stride
                 vkCmdDrawIndexed(
                     commandBuffer!,
                     UInt32(mesh.indexCount),    // Number of indices
                     1,                          // Instance count
                     UInt32(mesh.indexOffset),   // First index
-                    Int32(mesh.vertexOffset),   // Vertex offset
+                    Int32(vertexOffsetInVertices), // Vertex offset (in vertices, not bytes)
                     0                           // First instance
                 )
             }

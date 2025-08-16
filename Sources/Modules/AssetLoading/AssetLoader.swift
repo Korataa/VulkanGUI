@@ -75,6 +75,7 @@ public class AssetLoader {
 
             //Fill in pbr properties
             let pbr = mat.pbr_metallic_roughness
+            print("DEBUG: Material \(i) base_color_factor: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
             material.baseColor = Color(
                 pbr.base_color_factor.0 * 255.0,
                 pbr.base_color_factor.1 * 255.0,
@@ -88,8 +89,10 @@ public class AssetLoader {
             let baseColorTex = mat.pbr_metallic_roughness.base_color_texture
             if let texPtr = baseColorTex.texture, let basePtr = dataVal.textures {
                 material.baseColorTextureIndex = texPtr - basePtr
+                print("DEBUG: Material \(i) has base color texture index: \(material.baseColorTextureIndex)")
             } else {
                 material.baseColorTextureIndex = -1
+                print("DEBUG: Material \(i) has NO base color texture")
             }
 
             //similar for other textures
@@ -186,11 +189,18 @@ public class AssetLoader {
                         continue
                     }
                     if attr.type == cgltf_attribute_type_position {
+                        print("DEBUG: Loading POSITION data - count: \(count), stride: \(stride), offset: \(offset)")
                         let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
                             let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
-                            positions.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
+                            let pos = SIMD3<Float>(ptr[0], ptr[1], ptr[2])
+                            positions.append(pos)
+                            // Print first few positions for debugging
+                            if v < 5 {
+                                print("DEBUG: Vertex \(v) position: (\(pos.x), \(pos.y), \(pos.z))")
+                            }
                         }
+                        print("DEBUG: Loaded \(positions.count) positions")
                     } else if attr.type == cgltf_attribute_type_normal {
                         let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
@@ -212,6 +222,9 @@ public class AssetLoader {
                 // Initialize bounds for this mesh
                 var minBounds = Vector3(Float.infinity, Float.infinity, Float.infinity)
                 var maxBounds = Vector3(-Float.infinity, -Float.infinity, -Float.infinity)
+                
+                print("DEBUG: Creating \(positions.count) vertices for mesh \(i), primitive \(j)")
+                print("DEBUG: Available data - positions: \(positions.count), normals: \(normals.count), texCoords: \(texCoords.count)")
                 
                 for v in 0..<positions.count {
                     let pos = positions[v]
@@ -235,6 +248,8 @@ public class AssetLoader {
                     )
                 }
 
+                print("DEBUG: Mesh \(i) primitive \(j) bounds: min(\(minBounds.x), \(minBounds.y), \(minBounds.z)) to max(\(maxBounds.x), \(maxBounds.y), \(maxBounds.z))")
+
                 // --- Extract indices ---
                 var indices: [UInt32] = []
                 if  let indicesAccessor = prim.indices?.pointee,
@@ -249,11 +264,13 @@ public class AssetLoader {
                             for i in 0..<indexCount {
                                 indices.append(UInt32(basePtr[i]))
                             }
+                            print("DEBUG: Using 16-bit indices, first few indices: \(indices.prefix(6))")
                         } else if indexType == cgltf_component_type_r_32u {
                             let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
                             for i in 0..<indexCount {
                                 indices.append(basePtr[i])
                             }
+                            print("DEBUG: Using 32-bit indices, first few indices: \(indices.prefix(6))")
                         }
                 }
 
@@ -262,6 +279,15 @@ public class AssetLoader {
                     // Use high-performance staging buffer uploads via VulkanResourceManager
                     let vertexRegion = try resourceManager.allocateStaticVertices(vertices: vertices)
                     let indexRegion = try resourceManager.allocateIndices(indices: indices)
+                
+                    print("DEBUG: Mesh \(i).\(j) - Loading \(vertices.count) vertices and \(indices.count) indices")
+                    print("DEBUG: Vertex region offset: \(vertexRegion.offset), Index region offset: \(indexRegion.offset)")
+                    
+                    // Check for out-of-bounds indices
+                    let maxIndex = indices.max() ?? 0
+                    if maxIndex >= vertices.count {
+                        print("ERROR: Index out of bounds! Max index: \(maxIndex), vertex count: \(vertices.count)")
+                    }
                 
                     meshes.append(LoadedMesh(
                         vertexOffset: vertexRegion.offset,

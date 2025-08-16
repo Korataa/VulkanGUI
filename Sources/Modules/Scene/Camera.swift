@@ -48,7 +48,10 @@ public class Camera {
     public var projectionMatrix: Matrix4x4 {
         switch graphicsBackend {
             case .Vulkan:
-                return perspectiveRH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
+                // Vulkan needs Y-flipped projection
+                var proj = perspectiveRH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
+                proj.c1.y *= -1  // Flip Y axis for Vulkan clip space
+                return proj
             case .DirectX:
                 return perspectiveLH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
         }
