@@ -78,6 +78,17 @@ public final class VulkanResourceManager: ResourceManager {
         return id
     }
     
+    /// Get texture count
+    public func getTextureCount() -> Int {
+        return textures.getLength()
+    }
+    
+    /// Get texture by ID using a closure to avoid copy issues
+    public func withTexture<T>(id: Int, _ closure: (borrowing Texture) -> T) -> T? {
+        guard id >= 0 && id < textures.getLength() else { return nil }
+        return closure(textures[id])
+    }
+    
     /// Add a shader - concrete Vulkan shader type
     public func addShader(_ shader: consuming VulkanShader) -> Int {
         let id = nextResourceId
@@ -334,16 +345,23 @@ public final class VulkanResourceManager: ResourceManager {
         let size = vertices.count * MemoryLayout<T>.stride
         try updateVRAMUsage(delta: Int64(size))
         
+        // Store current offset BEFORE any operations to avoid race conditions
+        let currentOffset = staticVertexOffset
+        
         let region = BufferRegion(
-            offset: staticVertexOffset,
+            offset: currentOffset,
             size: size,
             buffer: staticVertexBuffer!
         )
         
         // Use high-performance staging buffer upload instead of direct upload
-        try uploadToGPUBuffer(data: vertices, destinationBuffer: staticVertexBuffer!, destinationOffset: staticVertexOffset)
+        try uploadToGPUBuffer(data: vertices, destinationBuffer: staticVertexBuffer!, destinationOffset: currentOffset)
         
+        // Update offset for next allocation
         staticVertexOffset += size
+        
+        print("DEBUG: VulkanResourceManager allocated \(vertices.count) vertices at offset \(currentOffset) bytes, next offset: \(staticVertexOffset)")
+        
         return region
     }
     
@@ -430,11 +448,13 @@ public final class VulkanResourceManager: ResourceManager {
         sourceOffset: Int,
         destinationOffset: Int
     ) {
-        // Use VulkanBuffer's high-performance copyTo method
+        // Use VulkanBuffer's high-performance copyTo method with proper offsets
         // This creates an optimal command buffer and submits it to the transfer queue
         source.copyTo(
             dstBuffer: destination,
             size: VkDeviceSize(size),
+            srcOffset: VkDeviceSize(sourceOffset),
+            dstOffset: VkDeviceSize(destinationOffset),
             transferCommandPool: transferCommandPool,
             transferQueue: transferQueue,
             logicalDevice: device

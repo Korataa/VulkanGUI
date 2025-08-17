@@ -1,6 +1,12 @@
 // The Swift Programming Language
-// https://docs.swift.org/swift-book
+// https://docs.swift.org/s// Camera orbit controls
+var cameraDistance: Float = 35.0
+var cameraAngleY: Float = 0.0      // Horizontal rotation (around Y axis)
+var cameraAngleX: Float = 0.0      // Vertical rotation (pitch)
+// Orbit around the model's feet/origin - this is where the model actually is
+let cameraTarget = Vector3(0.0, 0.0, 0.0)  // Look at model origin (feet)book
 import CSDL3
+import Foundation
 
 import Modules
 
@@ -45,22 +51,91 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/girl/scene.gltf") 
     print("Model transform: \(model.transform)")
     graphics.addModel(model: model)
     print("Model loaded successfully!")
+    
+    // Now that textures are loaded, create Vulkan textures
+    graphics.createTexturesFromResourceManager()
 } else {
     print("Failed to load model!")
 }
 
 // Initialize camera for rendering - position camera to view entire model
 // Model bounding sphere: center=(0,0,9.5), radius=14.9, extends from Z≈-5.4 to Z≈24.4
-let camera = Camera(
-    position: Vector3(0.0, 0.0, 35.0),  // Far back to see entire model
-    target: Vector3(0.0, 0.0, 9.5),     // Look at model center
-    up: Vector3(0.0, 1.0, 0.0)          // Standard up vector
-)
-print("Camera created: \(camera)")
-graphics.setCamera(camera)
+
+// Try different camera positions:
+// Front view: position: Vector3(0.0, 0.0, -35.0)
+// Back view: position: Vector3(0.0, 0.0, 35.0) 
+// Side view: position: Vector3(35.0, 0.0, 9.5)
+// Angled view: position: Vector3(20.0, 15.0, -20.0)
+
+@MainActor
+func updateCamera() {
+    // Convert spherical coordinates to cartesian
+    let x = cos(cameraAngleX) * sin(cameraAngleY) * cameraDistance
+    let y = sin(cameraAngleX) * cameraDistance + cameraTarget.y
+    let z = cos(cameraAngleX) * cos(cameraAngleY) * cameraDistance
+    
+    let camera = Camera(
+        position: Vector3(x, y, z),
+        target: cameraTarget,
+        up: Vector3(0.0, 1.0, 0.0)
+    )
+    graphics.setCamera(camera)
+}
+
+// Initialize camera
+updateCamera()
+print("Camera orbit controls: WASD to rotate, QE to zoom, R to reset")
+print("Current angle Y: \(cameraAngleY), angle X: \(cameraAngleX), distance: \(cameraDistance)")
 
 //----------------------------------------GAME LOOP-----------------------------------------------------
 while !quit {
     eventManager.pollEvents(shouldQuit: &quit)
+    
+    // Camera controls
+    guard let keyboardState = SDL_GetKeyboardState(nil) else { continue }
+    var cameraChanged = false
+    
+    if keyboardState[Int(SDL_SCANCODE_A.rawValue)] {
+        cameraAngleY -= 0.005  // Rotate left (much slower)
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_D.rawValue)] {
+        cameraAngleY += 0.005  // Rotate right (much slower)
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_W.rawValue)] {
+        cameraAngleX += 0.005  // Rotate up (much slower)
+        // Clamp vertical angle to prevent weird stretching
+        if cameraAngleX > 1.4 { cameraAngleX = 1.4 }  // About 80 degrees max
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_S.rawValue)] {
+        cameraAngleX -= 0.005  // Rotate down (much slower)
+        // Clamp vertical angle to prevent weird stretching
+        if cameraAngleX < -1.4 { cameraAngleX = -1.4 }  // About -80 degrees min
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_Q.rawValue)] {
+        cameraDistance -= 0.1  // Zoom in (much slower)
+        if cameraDistance < 5.0 { cameraDistance = 5.0 }
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_E.rawValue)] {
+        cameraDistance += 0.1  // Zoom out (much slower)
+        cameraChanged = true
+    }
+    if keyboardState[Int(SDL_SCANCODE_R.rawValue)] {
+        // Reset camera
+        cameraAngleY = 0.0
+        cameraAngleX = 0.0
+        cameraDistance = 35.0
+        cameraChanged = true
+        print("Camera reset")
+    }
+    
+    if cameraChanged {
+        updateCamera()
+    }
+    
     graphics.update()
 }

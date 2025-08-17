@@ -1,7 +1,8 @@
 #version 450
 
 layout(location = 0) in vec3 aPosition;
-layout(location = 1) in vec3 aNormal;       //For lighting
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aTexCoord;
 
 // Set 0: Frame data (camera, lighting)
 layout(set = 0, binding = 0) uniform FrameData {
@@ -18,17 +19,14 @@ layout(set = 1, binding = 0) uniform TransformData {
     mat4 normal;
 } transformData;
 
-layout(location = 0) out vec3 fragPos;      //to pass position to fragment shader
-layout(location = 1) out vec3 normal;       //to pass normal to grament shader
+layout(location = 0) out vec3 fragPos;
+layout(location = 1) out vec3 normal;
+layout(location = 2) out vec2 texCoords;  // Pass texture coordinates to fragment shader
 
 void main() {
-    //transform vertex position to world space
     vec4 worldPosition = transformData.model * vec4(aPosition, 1.0);
     fragPos = worldPosition.xyz;
-
-    //transform vertex normal with normal matrix
     normal = mat3(transformData.normal) * aNormal;
-
-    //Transform vertex to clip space
+    texCoords = aTexCoord;  // Pass through texture coordinates
     gl_Position = frameData.proj * frameData.view * worldPosition;
 }

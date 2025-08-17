@@ -99,6 +99,15 @@ public struct VulkanBuffer: ~Copyable, GPUBuffer {
     public func copyTo( dstBuffer: borrowing VulkanBuffer, size: VkDeviceSize, 
                         transferCommandPool: VkCommandPool,
                         transferQueue: VkQueue, logicalDevice: VkDevice) {
+        copyTo(dstBuffer: dstBuffer, size: size, srcOffset: 0, dstOffset: 0,
+               transferCommandPool: transferCommandPool, transferQueue: transferQueue, 
+               logicalDevice: logicalDevice)
+    }
+    
+    public func copyTo( dstBuffer: borrowing VulkanBuffer, size: VkDeviceSize,
+                        srcOffset: VkDeviceSize, dstOffset: VkDeviceSize,
+                        transferCommandPool: VkCommandPool,
+                        transferQueue: VkQueue, logicalDevice: VkDevice) {
         var allocInfo = VkCommandBufferAllocateInfo()
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY
@@ -118,8 +127,8 @@ public struct VulkanBuffer: ~Copyable, GPUBuffer {
         vkBeginCommandBuffer(commandBuffer!, &beginInfo)
 
         var copyRegion = VkBufferCopy()
-        copyRegion.srcOffset = 0
-        copyRegion.dstOffset = 0
+        copyRegion.srcOffset = srcOffset
+        copyRegion.dstOffset = dstOffset
         copyRegion.size = size
 
         vkCmdCopyBuffer(commandBuffer!, self.bufferHandle.asVulkanBuffer(), dstBuffer.bufferHandle.asVulkanBuffer(), 1, &copyRegion)

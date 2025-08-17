@@ -37,6 +37,9 @@ class VulkanRenderer {
 
     private var resourceManager: VulkanResourceManager? = nil
     var camera: Camera! // Add camera
+    
+    // Store materials for rendering
+    private var materials: [Material] = []
 
     var instance: VkInstance? = nil
     var surface: VkSurfaceKHR? = nil
@@ -93,6 +96,9 @@ class VulkanRenderer {
     var materialUBO: VkBuffer? = nil
     var materialUBOMemory: VmaAllocation? = nil
     
+    // Texture management
+    var textureManager: VulkanTextureManager? = nil
+    
     // Legacy UBO - keep for compatibility
     var objectUBO: VkBuffer? = nil
     var objectUBOMemory: VmaAllocation? = nil
@@ -103,6 +109,12 @@ class VulkanRenderer {
     var dynamicAlignment: VkDeviceSize = 0
     var transformAlignment: VkDeviceSize = 0
     var materialAlignment: VkDeviceSize = 0
+
+    // Material uploader for proper material system
+    private var materialUploader: VulkanMaterialUploader?
+    
+    // Main shader instance
+    private var mainShader: VulkanShader?
 
 
     //Descriptor sets
@@ -203,6 +215,9 @@ same here 0       1
         vkDestroyCommandPool(logicalDevice, commandPool, nil)
 
         //Cleanup vma resources
+        materialUploader?.cleanup()
+        mainShader?.cleanup()
+        textureManager?.cleanup()
         vmaDestroyBuffer(vmaAllocator!, frameUBO, frameUBOMemory)
         vmaDestroyBuffer(vmaAllocator!, objectUBO, objectUBOMemory)
         vmaDestroyBuffer(vmaAllocator!, vertexBuffer, vertexBufferAllocation)
@@ -262,6 +277,12 @@ same here 0       1
         createLogicalDevice()
         //Maybe create allocator here?
         setupVmaAllocator()
+        
+        // Initialize material uploader after VMA allocator is ready
+        materialUploader = VulkanMaterialUploader(vmaAllocator: vmaAllocator!)
+        
+        // Initialize texture manager after VMA allocator and command pool are ready
+        // Note: We'll initialize this after command pool is created
 
         //Swapchain and rendering infrastructure
         createSwapchain()
@@ -278,13 +299,63 @@ same here 0       1
         //Framebuffers and commands
         createFrameBuffers()
         createCommandPool()
-
+        
+        // Initialize texture manager after command pool is created
+        textureManager = VulkanTextureManager(
+            device: logicalDevice!,
+            physicalDevice: physicalDevice!,
+            allocator: vmaAllocator!,
+            commandPool: commandPool!,
+            graphicsQueue: queueManager!.graphicsQueue!
+        )
+        _ = textureManager!.initialize()
+        
+        // Initialize main shader after texture manager and uniform buffers
+        mainShader = VulkanShader(
+            device: logicalDevice!,
+            vmaAllocator: vmaAllocator!,
+            textureManager: textureManager
+        )
+        
+        // Set up the shader with vertex and fragment shaders
+        try! setupMainShader()
+        
         createCommandBuffers()
         createSyncObjects()
+    }
+    
+    private func setupMainShader() throws {
+        guard let shader = mainShader else { 
+            fatalError("Main shader not initialized")
+        }
+        
+        // Load shader data
+        guard let assetsPath = getAssetsPath() else {
+            fatalError("Can't get assets path!")
+        }
+        
+        let vertShaderPath: String = "\(assetsPath)/Shaders/vert.spv"
+        let fragShaderPath: String = "\(assetsPath)/Shaders/frag.spv"
+        
+        print("Loading shaders from: \(vertShaderPath), \(fragShaderPath)")
+        
+        // Initialize shader with vertex and fragment data
+        try shader.load(vertexPath: vertShaderPath, fragmentPath: fragShaderPath)
+        
+        // Setup material binding with our material UBO
+        shader.setupMaterialBinding(materialBuffer: materialUBO!)
+        
+        // Setup transform descriptor sets if we have transform buffer
+        // (This will be done when transform buffer is ready)
     }
 
     func setResourceManager(_ resourceManager: VulkanResourceManager) {
         self.resourceManager = resourceManager
+        
+        // Create textures from resource manager now that we have one
+        if textureManager != nil {
+            createTexturesFromResourceManager()
+        }
     }
 
     internal func createContext() {
@@ -1241,14 +1312,23 @@ same here 0       1
             pImmutableSamplers: nil
         )
     
-        // Set 2: Material data (per mesh)
-        var materialBindings = VkDescriptorSetLayoutBinding(
-            binding: 0,
-            descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-            descriptorCount: 1,
-            stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
-            pImmutableSamplers: nil
-        )
+        // Set 2: Material data (per mesh) 
+        let materialBindings = [
+            VkDescriptorSetLayoutBinding(
+                binding: 0,
+                descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            ),
+            VkDescriptorSetLayoutBinding(
+                binding: 1,
+                descriptorType: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            )
+        ]
     
         // Create frame layout
         var frameLayoutInfo = VkDescriptorSetLayoutCreateInfo()
@@ -1279,9 +1359,9 @@ same here 0       1
         // Create material layout
         var materialLayoutInfo = VkDescriptorSetLayoutCreateInfo()
         materialLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-        materialLayoutInfo.bindingCount = 1
-        withUnsafePointer(to: &materialBindings) { ptr in
-            materialLayoutInfo.pBindings = ptr
+        materialLayoutInfo.bindingCount = 2  // Changed from 1 to 2
+        materialBindings.withUnsafeBufferPointer { bufferPtr in
+            materialLayoutInfo.pBindings = bufferPtr.baseAddress
         }
     
         let materialLayoutResult = vkCreateDescriptorSetLayout(logicalDevice, &materialLayoutInfo, nil, &materialSetLayout)
@@ -1293,12 +1373,13 @@ same here 0       1
         let poolSizes = DynamicArray<VkDescriptorPoolSize>(
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1),  // for frame data
             VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1), // for transform data
-            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1) // for material data
+            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1), // for material data
+            VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 1) // for texture samplers
         )
     
         var poolInfo = VkDescriptorPoolCreateInfo()
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
-        poolInfo.poolSizeCount = 3
+        poolInfo.poolSizeCount = 4  // Changed from 3 to 4
         poolInfo.pPoolSizes = poolSizes.getDataAsConstPointer()
         poolInfo.maxSets = 3 // one for each descriptor set layout
     
@@ -1358,7 +1439,10 @@ same here 0       1
     
         vkUpdateDescriptorSets(logicalDevice, 1, &transformDescriptorWrite, 0, nil)
     
-        // Update material descriptor set
+        // Update material descriptor set with both buffer and texture
+        var descriptorWrites: [VkWriteDescriptorSet] = []
+        
+        // Material buffer binding
         var materialDescriptorWrite = VkWriteDescriptorSet()
         materialDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
         materialDescriptorWrite.dstSet = materialDescriptorSet!
@@ -1366,16 +1450,51 @@ same here 0       1
         materialDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
         materialDescriptorWrite.descriptorCount = 1
     
-        var materialBufferInfo = VkDescriptorBufferInfo(
+        let materialBufferInfo = VkDescriptorBufferInfo(
             buffer: materialUBO,
             offset: 0,
             range: VkDeviceSize(MemoryLayout<MaterialConstants>.stride)
         )
-        withUnsafePointer(to: &materialBufferInfo) { ptr in
-            materialDescriptorWrite.pBufferInfo = ptr
+        descriptorWrites.append(materialDescriptorWrite)
+        
+        // Texture sampler binding 
+        var textureDescriptorWrite = VkWriteDescriptorSet()
+        textureDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+        textureDescriptorWrite.dstSet = materialDescriptorSet!
+        textureDescriptorWrite.dstBinding = 1
+        textureDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+        textureDescriptorWrite.descriptorCount = 1
+        
+        var imageInfo = VkDescriptorImageInfo()
+        var hasValidTexture = false
+        if let defaultTexture = textureManager?.getDefaultTexture(),
+           let imageView = defaultTexture.imageView,
+           let sampler = defaultTexture.sampler {
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            imageInfo.imageView = imageView
+            imageInfo.sampler = sampler
+            hasValidTexture = true
+            descriptorWrites.append(textureDescriptorWrite)
+        } else {
+            print("Warning: No default texture available, skipping texture binding")
         }
-    
-        vkUpdateDescriptorSets(logicalDevice, 1, &materialDescriptorWrite, 0, nil)
+        
+        // Update all descriptors at once
+        withUnsafePointer(to: materialBufferInfo) { bufferPtr in
+            descriptorWrites[0].pBufferInfo = bufferPtr
+            if hasValidTexture {
+                withUnsafePointer(to: imageInfo) { imagePtr in
+                    descriptorWrites[1].pImageInfo = imagePtr
+                    
+                    descriptorWrites.withUnsafeBufferPointer { writes in
+                        vkUpdateDescriptorSets(logicalDevice, UInt32(writes.count), writes.baseAddress, 0, nil)
+                    }
+                }
+            } else {
+                // Update only the buffer descriptor
+                vkUpdateDescriptorSets(logicalDevice, 1, &descriptorWrites[0], 0, nil)
+            }
+        }
     }
 
     func createGraphicsPipeline() {
@@ -1871,14 +1990,29 @@ same here 0       1
         vmaUnmapMemory(vmaAllocator!, transformUBOMemory!)
     }
 
-    func updateMaterialUBO(at offset: Int, materialID: UInt32) {
-        var constants = MaterialConstants(
-            materialID: materialID
-        )
-        // For now, set a bright white color to ensure visibility
-        constants.baseColor = Vector4(1.0, 1.0, 1.0, 1.0)
+    func updateMaterialUBO(at offset: Int, material: Material) {
+        guard let materialUploader = materialUploader else {
+            fatalError("Material uploader not initialized!")
+        }
         
-        print("DEBUG: Uploading material \(materialID) at offset \(offset) with baseColor: \(constants.baseColor)")
+        // Use VulkanMaterialUploader to convert Material to MaterialData
+        materialUploader.update(from: material)
+        
+        // Get the MaterialData from the uploader and convert to MaterialConstants format
+        // For now, we'll extract the key values and put them into MaterialConstants
+        var constants = MaterialConstants(
+            materialID: 0  // We don't need this anymore since we have real material data
+        )
+        constants.baseColor = Vector4(
+            material.baseColor.linearR,
+            material.baseColor.linearG,
+            material.baseColor.linearB,
+            material.isOpaque ? 1.0 : material.alphaCutoff
+        )
+        constants.metallicFactor = material.metallicFactor
+        constants.roughnessFactor = material.roughnessFactor
+        
+        print("DEBUG: Uploading material at offset \(offset) with baseColor: \(constants.baseColor), metallic: \(constants.metallicFactor), roughness: \(constants.roughnessFactor)")
 
         var dataPtr: UnsafeMutableRawPointer?
         let result = vmaMapMemory(vmaAllocator!, materialUBOMemory!, &dataPtr)
@@ -1966,9 +2100,9 @@ same here 0       1
             projectionMatrix: camera.projectionMatrix,
             cameraPosition: camera.position,
             time: 0.0, // TODO: Add time tracking if needed
-            lightPosition: Vector3(5.0, 5.0, 5.0), // Default light position
-            lightColor: Vector3(1.0, 1.0, 1.0),    // White light
-            ambientColor: Vector3(0.1, 0.1, 0.1)   // Dark ambient
+            lightPosition: Vector3(50.0, 50.0, -50.0), // Move light much further away and behind camera
+            lightColor: Vector3(2.0, 2.0, 2.0),    // Brighter white light
+            ambientColor: Vector3(0.3, 0.3, 0.3)   // Brighter ambient
         )
         
         // Debug: Print camera matrices (only once per few frames to avoid spam)
@@ -2065,20 +2199,31 @@ same here 0       1
                 if currentMaterialID != mesh.materialID {
                     currentMaterialID = mesh.materialID
                     
+                    // Get the actual material from the model
+                    let material = model.materials.count > Int(mesh.materialID) ? 
+                        model.materials[Int(mesh.materialID)] : 
+                        Material() // Fallback to default white material
+                    
                     // Update material UBO
                     let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
-                    updateMaterialUBO(at: materialOffset, materialID: mesh.materialID)
+                    updateMaterialUBO(at: materialOffset, material: material)
                     
-                    // Bind material descriptor set with dynamic offset
-                    var materialOffsetValue = UInt32(materialOffset)
-                    vkCmdBindDescriptorSets(
-                        commandBuffer,
-                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipelineLayout,
-                        2, // Set 2: materials
-                        1, &materialDescriptorSet,
-                        1, &materialOffsetValue
-                    )
+                    // Update material shader binding with texture
+                    mainShader?.getMaterialBinding()?.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
+                    
+                    // Bind material descriptor set with texture
+                    if let materialSet = mainShader?.getMaterialBinding()?.getDescriptorSet(frameIndex: currentFrame) {
+                        var descriptorSet: VkDescriptorSet? = materialSet
+                        var materialOffsetValue = UInt32(materialOffset)
+                        vkCmdBindDescriptorSets(
+                            commandBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            pipelineLayout,
+                            2, // Set 2: materials
+                            1, &descriptorSet,
+                            1, &materialOffsetValue // Dynamic offset for material UBO
+                        )
+                    }
                 }
 
                 //Draw
@@ -2137,20 +2282,31 @@ same here 0       1
                 if currentMaterialID != mesh.materialID {
                     currentMaterialID = mesh.materialID
                     
+                    // Get the actual material from the model
+                    let material = model.materials.count > Int(mesh.materialID) ? 
+                        model.materials[Int(mesh.materialID)] : 
+                        Material() // Fallback to default white material
+                    
                     // Update material UBO
                     let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
-                    updateMaterialUBO(at: materialOffset, materialID: mesh.materialID)
+                    updateMaterialUBO(at: materialOffset, material: material)
                     
-                    // Bind material descriptor set with dynamic offset
-                    var materialOffsetValue = UInt32(materialOffset)
-                    vkCmdBindDescriptorSets(
-                        commandBuffer,
-                        VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        pipelineLayout,
-                        2, // Set 2: materials
-                        1, &materialDescriptorSet,
-                        1, &materialOffsetValue
-                    )
+                    // Update material shader binding with texture
+                    mainShader?.getMaterialBinding()?.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
+                    
+                    // Bind material descriptor set with texture
+                    if let materialSet = mainShader?.getMaterialBinding()?.getDescriptorSet(frameIndex: currentFrame) {
+                        var descriptorSet: VkDescriptorSet? = materialSet
+                        var materialOffsetValue = UInt32(materialOffset)
+                        vkCmdBindDescriptorSets(
+                            commandBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            pipelineLayout,
+                            2, // Set 2: materials
+                            1, &descriptorSet,
+                            1, &materialOffsetValue // Dynamic offset for material UBO
+                        )
+                    }
                 }
 
                 //Draw
@@ -2332,6 +2488,35 @@ same here 0       1
     func waitIdle() {
         //have to wait for logicalDevice to be idle before destroying everything!
         vkDeviceWaitIdle(logicalDevice)
+    }
+    
+    // Create Vulkan textures from loaded texture data in ResourceManager
+    public func createTexturesFromResourceManager() {
+        guard let resourceManager = resourceManager else {
+            print("No resource manager available for texture creation")
+            return
+        }
+        
+        guard let textureManager = textureManager else {
+            print("No texture manager available for texture creation")
+            return
+        }
+        
+        // Get all textures from resource manager
+        let textureCount = resourceManager.getTextureCount()
+        print("Creating \(textureCount) Vulkan textures from resource manager")
+        
+        for textureId in 0..<textureCount {
+            let result = resourceManager.withTexture(id: textureId) { textureData in
+                return textureManager.createTexture(from: textureData)
+            }
+            
+            if let vulkanTextureIndex = result, vulkanTextureIndex >= 0 {
+                print("Created Vulkan texture \(vulkanTextureIndex) from resource texture \(textureId)")
+            } else {
+                print("Failed to create Vulkan texture from resource texture \(textureId)")
+            }
+        }
     }
 
 }

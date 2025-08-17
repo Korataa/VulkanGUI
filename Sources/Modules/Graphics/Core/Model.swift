@@ -4,6 +4,7 @@ import Foundation
 //Lightweight - references shared mesh (sometimes) + unique transform
 public class Model {
     public var meshes: [Mesh] = []
+    public var materials: [Material] = []  // Materials indexed by materialID
     public var transform: Transform
 
     //Cache for the model's bounding sphere
@@ -24,13 +25,15 @@ public class Model {
         }
     }
 
-    init(meshes: [Mesh], transform: Transform) {
+    init(meshes: [Mesh], materials: [Material] = [], transform: Transform) {
         self.meshes = meshes
+        self.materials = materials
         self.transform = transform
     }
 
-    init(mesh: Mesh, transform: Transform) {
+    init(mesh: Mesh, material: Material? = nil, transform: Transform) {
         self.meshes = [mesh]
+        self.materials = material != nil ? [material!] : []
         self.transform = transform
     }
     

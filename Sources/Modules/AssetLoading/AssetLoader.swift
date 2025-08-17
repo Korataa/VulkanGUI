@@ -55,15 +55,21 @@ public class AssetLoader {
 
         // --- 3. Load textures ---
         var textureStorage = TextureStorage()
+        print("DEBUG: Loading \(dataVal.images_count) images/textures")
         for i in 0..<dataVal.images_count {
             let image = dataVal.images[i]
+            print("DEBUG: Loading image \(i) - URI: \(image.uri != nil ? String(cString: image.uri!) : "embedded")")
             if let imageData = loadImageData(from: image, basePath: basePath) {
                 let (pixels, width, height, channels) = decodeImage(imageData)
                 var texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
+                print("DEBUG: Decoded image \(i): \(width)x\(height), \(channels) channels")
                 
                 // Register texture with resource manager and get ID using explicit move
                 let textureId = resourceManager.addTexture(consume texture)
                 textureStorage.addTextureId(textureId, width: Int(width), height: Int(height), channels: Int(channels))
+                print("DEBUG: Registered texture \(i) with ID: \(textureId)")
+            } else {
+                print("DEBUG: Failed to load image \(i)")
             }
         }
 
@@ -75,32 +81,82 @@ public class AssetLoader {
 
             //Fill in pbr properties
             let pbr = mat.pbr_metallic_roughness
-            print("DEBUG: Material \(i) base_color_factor: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
-            material.baseColor = Color(
-                pbr.base_color_factor.0 * 255.0,
-                pbr.base_color_factor.1 * 255.0,
-                pbr.base_color_factor.2 * 255.0,
-                pbr.base_color_factor.3 * 255.0
-            )
-            material.metallicFactor = pbr.metallic_factor
-            material.roughnessFactor = pbr.roughness_factor
-
-            //Add textures
-            let baseColorTex = mat.pbr_metallic_roughness.base_color_texture
-            if let texPtr = baseColorTex.texture, let basePtr = dataVal.textures {
-                material.baseColorTextureIndex = texPtr - basePtr
-                print("DEBUG: Material \(i) has base color texture index: \(material.baseColorTextureIndex)")
+            print("DEBUG: Material \(i) GLTF base_color_factor: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
+            
+            // Check if this GLTF uses specular glossiness extension
+            print("DEBUG: Material \(i) has extensions: \(mat.extensions != nil ? "YES" : "NO")")
+            print("DEBUG: Material \(i) has_pbr_specular_glossiness: \(mat.has_pbr_specular_glossiness != 0 ? "YES" : "NO")")
+            
+            // Use specular-glossiness extension if available (which contains the real colors)
+            if mat.has_pbr_specular_glossiness != 0 {
+                let specGloss = mat.pbr_specular_glossiness
+                print("DEBUG: Material \(i) specular-glossiness diffuse_factor: (\(specGloss.diffuse_factor.0), \(specGloss.diffuse_factor.1), \(specGloss.diffuse_factor.2), \(specGloss.diffuse_factor.3))")
+                
+                // Use the diffuse_factor from specular-glossiness extension (this is the actual color)
+                material.baseColor = Color(
+                    specGloss.diffuse_factor.0 * 255.0,
+                    specGloss.diffuse_factor.1 * 255.0,
+                    specGloss.diffuse_factor.2 * 255.0,
+                    specGloss.diffuse_factor.3 * 255.0
+                )
+                
+                // Convert glossiness to roughness (roughness = 1.0 - glossiness)
+                material.roughnessFactor = 1.0 - specGloss.glossiness_factor
+                // Use specular factor as metallic approximation (this is not perfect but a reasonable conversion)
+                let specularIntensity = (specGloss.specular_factor.0 + specGloss.specular_factor.1 + specGloss.specular_factor.2) / 3.0
+                material.metallicFactor = specularIntensity
+                
+                print("DEBUG: Material \(i) using specular-glossiness color: (\(specGloss.diffuse_factor.0), \(specGloss.diffuse_factor.1), \(specGloss.diffuse_factor.2), \(specGloss.diffuse_factor.3))")
             } else {
-                material.baseColorTextureIndex = -1
-                print("DEBUG: Material \(i) has NO base color texture")
+                // Fallback to standard PBR
+                material.baseColor = Color(
+                    pbr.base_color_factor.0 * 255.0,
+                    pbr.base_color_factor.1 * 255.0,
+                    pbr.base_color_factor.2 * 255.0,
+                    pbr.base_color_factor.3 * 255.0
+                )
+                material.metallicFactor = pbr.metallic_factor
+                material.roughnessFactor = pbr.roughness_factor
+                print("DEBUG: Material \(i) using standard PBR color: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
             }
 
-            //similar for other textures
-            let metallicRoughnessTex = mat.pbr_metallic_roughness.metallic_roughness_texture
-            if let texPtr = metallicRoughnessTex.texture, let basePtr = dataVal.textures {
-                material.metallicRoughnessTextureIndex = texPtr - basePtr
+            //Add textures - check specular-glossiness extension first
+            if mat.has_pbr_specular_glossiness != 0 {
+                // Use diffuse texture from specular-glossiness extension
+                let diffuseTex = mat.pbr_specular_glossiness.diffuse_texture
+                if let texPtr = diffuseTex.texture, let basePtr = dataVal.textures {
+                    material.baseColorTextureIndex = texPtr - basePtr
+                    print("DEBUG: Material \(i) has specular-glossiness diffuse texture index: \(material.baseColorTextureIndex)")
+                } else {
+                    material.baseColorTextureIndex = -1
+                    print("DEBUG: Material \(i) has NO specular-glossiness diffuse texture")
+                }
+                
+                // Use specular-glossiness texture for metallic-roughness
+                let specGlossTex = mat.pbr_specular_glossiness.specular_glossiness_texture  
+                if let texPtr = specGlossTex.texture, let basePtr = dataVal.textures {
+                    material.metallicRoughnessTextureIndex = texPtr - basePtr
+                } else {
+                    material.metallicRoughnessTextureIndex = -1
+                }
             } else {
-                material.metallicRoughnessTextureIndex = -1
+                // Standard PBR texture handling
+                let baseColorTex = mat.pbr_metallic_roughness.base_color_texture
+                if let texPtr = baseColorTex.texture, let basePtr = dataVal.textures {
+                    material.baseColorTextureIndex = texPtr - basePtr
+                    print("DEBUG: Material \(i) has base color texture index: \(String(describing: material.baseColorTextureIndex))")
+                } else {
+                    material.baseColorTextureIndex = -1
+                    print("DEBUG: Material \(i) has NO base color texture")
+                }
+
+                //similar for other textures
+                let metallicRoughnessTex = mat.pbr_metallic_roughness.metallic_roughness_texture
+                if let texPtr = metallicRoughnessTex.texture, let basePtr = dataVal.textures {
+                    material.metallicRoughnessTextureIndex = texPtr - basePtr
+                } else {
+                    material.metallicRoughnessTextureIndex = -1
+                }
             }
 
             let normalTex = mat.normal_texture
@@ -333,6 +389,7 @@ public class AssetLoader {
         let meshes = loadedModel.meshes.map { createMesh(from: $0) }
         return Model(
             meshes: meshes,
+            materials: loadedModel.materials,  // Pass the actual materials
             transform: Transform(
                 position: Vector3(0, 0, 0),
                 scale: Vector3(1, 1, 1)

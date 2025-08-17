@@ -2,6 +2,7 @@
 
 layout(location = 0) in vec3 fragPos;
 layout(location = 1) in vec3 normal;
+layout(location = 2) in vec2 texCoords;  // Add texture coordinates
 
 layout(location = 0) out vec4 outColor;
 
@@ -21,6 +22,9 @@ layout(set = 2, binding = 0) uniform MaterialData {
     float roughness;
     float metallic;
 } materialData;
+
+// Set 2: Texture sampler for diffuse/base color texture  
+layout(set = 2, binding = 1) uniform sampler2D diffuseTexture;
 
 void main() {
     // Check for zero or invalid normals and provide fallback
@@ -45,8 +49,11 @@ void main() {
     //diffuse term
     vec3 diffuse = diff * frameData.lightColor;
 
-    //Simple phong-like color with material influence
-    vec3 result = (ambient + diffuse) * materialData.baseColor.rgb;
-
-    outColor = vec4(result, 1.0);
+    // Sample the diffuse texture and multiply with material base color
+    vec4 textureColor = texture(diffuseTexture, texCoords);
+    vec3 materialColor = materialData.baseColor.rgb * textureColor.rgb;
+    
+    // Apply lighting
+    vec3 finalColor = materialColor * (ambient + diffuse);
+    outColor = vec4(finalColor, materialData.baseColor.a * textureColor.a);
 }

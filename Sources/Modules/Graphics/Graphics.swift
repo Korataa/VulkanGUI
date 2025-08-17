@@ -122,6 +122,10 @@ public class Graphics {
     public func addModel(model: Model) {
         renderModels.append(model)
     }
+    
+    public func createTexturesFromResourceManager() {
+        renderer.createTexturesFromResourceManager()
+    }
 
     ///Everytime model is added to scene this must be called (or the alternative version of this method)
     public func addModel(mesh: Mesh, transform: Transform) {

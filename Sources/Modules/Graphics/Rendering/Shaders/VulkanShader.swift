@@ -23,6 +23,7 @@ public class VulkanShader: Shader {
     // MARK: - Private Properties
     private let device: VkDevice
     private let vmaAllocator: VmaAllocator
+    private let textureManager: VulkanTextureManager?
     
     // Shader modules (owned)
     private var vertexModule: VkShaderModule?
@@ -42,9 +43,10 @@ public class VulkanShader: Shader {
     private var descriptorSetsReady = false
     
     // MARK: - Initialization
-    public init(device: VkDevice, vmaAllocator: VmaAllocator) {
+    public init(device: VkDevice, vmaAllocator: VmaAllocator, textureManager: VulkanTextureManager? = nil) {
         self.device = device
         self.vmaAllocator = vmaAllocator
+        self.textureManager = textureManager
     }
     
     // MARK: - Resource Protocol
@@ -111,8 +113,13 @@ public class VulkanShader: Shader {
         try createDescriptorPool()
         try createPipelineLayout()
         
-        // Create material binding
-        materialBinding = MaterialShaderBinding(device: device, vmaAllocator: vmaAllocator)
+        // Create material binding - will be set up later when material buffer is available
+        // Call setupMaterialBinding(materialBuffer:) after material UBO is created
+        if textureManager != nil {
+            print("Note: MaterialShaderBinding will be set up later when material buffer is available")
+        } else {
+            print("Warning: VulkanShader created without textureManager - textures will not be available")
+        }
         
         // Note: Descriptor sets should be allocated separately when buffer is available
         // Call setupDescriptorSets(transformBuffer:) after creating the transform buffer
@@ -123,7 +130,25 @@ public class VulkanShader: Shader {
         descriptorSetsReady = true
     }
     
-    public func bind(commandBuffer: VkCommandBuffer) {
+    public func setupMaterialBinding(materialBuffer: VkBuffer) {
+        guard let textureManager = textureManager else {
+            print("Warning: Cannot setup MaterialShaderBinding without textureManager")
+            return
+        }
+        
+        materialBinding = MaterialShaderBinding(
+            device: device,
+            textureManager: textureManager,
+            materialBuffer: materialBuffer
+        )
+        print("DEBUG: MaterialShaderBinding set up in VulkanShader")
+    }
+    
+    public func getMaterialBinding() -> MaterialShaderBinding? {
+        return materialBinding
+    }
+    
+    public func bind(commandBuffer: VkCommandBuffer, frameIndex: Int = 0) {
         guard let pipelineLayout = pipelineLayout else { return }
 
         // Bind transform descriptor set if available
@@ -144,7 +169,7 @@ public class VulkanShader: Shader {
         
         // Bind material descriptor set if available
         if let materialBinding = materialBinding,
-           let materialDescriptorSet = materialBinding.currentSet {
+           let materialDescriptorSet = materialBinding.getDescriptorSet(frameIndex: frameIndex) {
             withUnsafePointer(to: materialDescriptorSet) { materialSetPtr in
                 vkCmdBindDescriptorSets(
                     commandBuffer,
@@ -158,6 +183,11 @@ public class VulkanShader: Shader {
                 )
             }
         }
+    }
+    
+    // Protocol-required method for Shader conformance
+    public func bind(commandBuffer: OpaquePointer) {
+        bind(commandBuffer: commandBuffer, frameIndex: 0)
     }
     
     public func setMaterial(_ material: Material) throws {
