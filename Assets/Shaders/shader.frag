@@ -27,33 +27,20 @@ layout(set = 2, binding = 0) uniform MaterialData {
 layout(set = 2, binding = 1) uniform sampler2D diffuseTexture;
 
 void main() {
-    // Check for zero or invalid normals and provide fallback
-    vec3 norm = normal;
-    float normalLength = length(norm);
-    if (normalLength < 0.001) {
-        // Use a default upward normal for faces with missing/zero normals
-        norm = vec3(0.0, 1.0, 0.0);
-    } else {
-        norm = normalize(norm);
-    }
-
-    //calculate light direction
-    vec3 lightDir = normalize(frameData.lightPos - fragPos);
-
-    //diffuse shading
-    float diff = max(dot(norm, lightDir), 0.0);
-
-    //ambient term - increase ambient to make model more visible
-    vec3 ambient = 0.3 * frameData.lightColor;
-
-    //diffuse term
-    vec3 diffuse = diff * frameData.lightColor;
-
-    // Sample the diffuse texture and multiply with material base color
+    // Sample the diffuse texture
     vec4 textureColor = texture(diffuseTexture, texCoords);
-    vec3 materialColor = materialData.baseColor.rgb * textureColor.rgb;
     
-    // Apply lighting
-    vec3 finalColor = materialColor * (ambient + diffuse);
-    outColor = vec4(finalColor, materialData.baseColor.a * textureColor.a);
+    // Debug: Let's see what the material base color is
+    vec3 matColor = materialData.baseColor.rgb;
+    
+    // Ensure material color isn't too dark (some materials might have very dark base colors)
+    matColor = max(matColor, vec3(0.2)); // Minimum brightness
+    
+    // Combine texture with material
+    vec3 finalColor = matColor * textureColor.rgb;
+    
+    // Add a bit of ambient lighting so it's not completely black
+    finalColor = finalColor * 0.8 + vec3(0.2);
+    
+    outColor = vec4(finalColor, 1.0);
 }

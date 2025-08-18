@@ -3,8 +3,7 @@
 var cameraDistance: Float = 35.0
 var cameraAngleY: Float = 0.0      // Horizontal rotation (around Y axis)
 var cameraAngleX: Float = 0.0      // Vertical rotation (pitch)
-// Orbit around the model's feet/origin - this is where the model actually is
-let cameraTarget = Vector3(0.0, 0.0, 0.0)  // Look at model origin (feet)book
+let cameraTarget = Vector3(0.0, 0.0, 0.0)
 import CSDL3
 import Foundation
 
