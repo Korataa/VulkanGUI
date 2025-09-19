@@ -92,6 +92,7 @@ let package = Package(
                 .unsafeFlags(unsafeLibFlags)
             ]
         ),
+
         .executableTarget(
             name: "DeckRPG",
             dependencies: ["Modules"],

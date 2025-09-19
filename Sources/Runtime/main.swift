@@ -1,6 +1,6 @@
-// The Swift Programming Language
-// https://docs.swift.org/s// Camera orbit controls
-var cameraDistance: Float = 35.0
+//let cameraDistance: Float = 10.0  // Back to reasonable distanceThe Swift Programming Language
+// https://docs.swift.org/s// Camera orbit controls - Simple close position for debugging
+var cameraDistance: Float = 125.0  // Much closer for debugging
 var cameraAngleY: Float = 0.0      // Horizontal rotation (around Y axis)
 var cameraAngleX: Float = 0.0      // Vertical rotation (pitch)
 let cameraTarget = Vector3(0.0, 0.0, 0.0)
@@ -37,14 +37,13 @@ let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceMa
 // Use ResourceSystem for all resource operations, not graphics.resourceManager directly
 let assetLoader = AssetLoader(resourceManager: resourceSystem.graphicsResourceManager)
 
-if let loadedModel = assetLoader.loadModel(at: "Assets/Models/girl/scene.gltf") {
+if let loadedModel = assetLoader.loadModel(at: "Assets/Models/CrateBox/scene.gltf") {
     let model = assetLoader.createModel(from: loadedModel)
     
-    // Keep model in its original orientation (no rotation)
-    // model.transform.rotation = Quaternion.identity()  // This is already the default
-    
-    // Keep original scale
-    model.transform.scale = Vector3(1.0, 1.0, 1.0)
+    // Set model to simple identity transform for debugging
+    model.transform.position = Vector3(0.0, 0.0, 0.0)  // At origin
+    model.transform.rotation = Quaternion.fromAxisAngle(axis: Vector3(0.0, 1.0, 0.0), angle: Float.pi / 2)  // 90° Y rotation
+    model.transform.scale = Vector3(1.0, 1.0, 1.0)      // No scaling
     
     print("Model created with \(model.meshes.count) meshes, bounding sphere: \(model.boundingSphere)")
     print("Model transform: \(model.transform)")
@@ -73,12 +72,25 @@ func updateCamera() {
     let y = sin(cameraAngleX) * cameraDistance + cameraTarget.y
     let z = cos(cameraAngleX) * cos(cameraAngleY) * cameraDistance
     
+    // Get correct aspect ratio from graphics system
+    let aspectRatio = graphics.getAspectRatio()
+    
     let camera = Camera(
         position: Vector3(x, y, z),
         target: cameraTarget,
-        up: Vector3(0.0, 1.0, 0.0)
+        up: Vector3(0.0, 1.0, 0.0),
+        fovY: 45.0,
+        fovX: 0.0,  // Will be calculated from aspect ratio
+        aspect: aspectRatio,  // Use actual window aspect ratio
+        nearZ: 1.0,
+        farZ: 200.0  // Reduced from 1000.0 for better depth precision
     )
     graphics.setCamera(camera)
+
+    print("Camera position: \(Vector3(x, y, z))")
+    print("Camera target: \(cameraTarget)")
+    print("Camera distance: \(cameraDistance)")
+    print("Camera aspect ratio: \(aspectRatio)")
 }
 
 // Initialize camera
@@ -127,7 +139,7 @@ while !quit {
         // Reset camera
         cameraAngleY = 0.0
         cameraAngleX = 0.0
-        cameraDistance = 35.0
+        cameraDistance = 10.0
         cameraChanged = true
         print("Camera reset")
     }

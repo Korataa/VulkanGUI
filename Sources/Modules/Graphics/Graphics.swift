@@ -138,6 +138,11 @@ public class Graphics {
     public func setCamera(_ camera: Camera) {
         renderer.camera = camera
     }
+    
+    /// Get the current aspect ratio from the renderer
+    public func getAspectRatio() -> Float {
+        return renderer.getAspectRatio()
+    }
 
     public func cleanup() {
 

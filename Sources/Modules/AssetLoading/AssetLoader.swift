@@ -176,6 +176,20 @@ public class AssetLoader {
             // Note: cgltf_texture_view doesn't have strength field, using default
             material.occlusionStrength = 1.0
 
+            // Fix for materials with no texture but black base color factor
+            if material.baseColorTextureIndex == -1 {
+                let baseColorFactor = (material.baseColor.r / 255.0, material.baseColor.g / 255.0, material.baseColor.b / 255.0)
+                if baseColorFactor.0 == 0.0 && baseColorFactor.1 == 0.0 && baseColorFactor.2 == 0.0 {
+                    // This material has no texture and black base color - give it a reasonable default
+                    material.baseColor = Color(200, 200, 200, 255)  // Light gray
+                    print("DEBUG: Fixed material \(i) with black base color and no texture - setting to light gray")
+                }
+            }
+            
+            // TEMPORARY DEBUG: Make ALL materials bright white to test visibility
+            material.baseColor = Color(255, 255, 255, 255)  // Force white
+            print("DEBUG: FORCING material \(i) to bright white for visibility test")
+
             materials.append(material)
         }
 
@@ -328,6 +342,8 @@ public class AssetLoader {
                             }
                             print("DEBUG: Using 32-bit indices, first few indices: \(indices.prefix(6))")
                         }
+                        
+                        print("DEBUG: Loaded \(indices.count) indices")
                 }
 
                 // --- Upload to buffers and create mesh descriptor ---
@@ -392,7 +408,7 @@ public class AssetLoader {
             materials: loadedModel.materials,  // Pass the actual materials
             transform: Transform(
                 position: Vector3(0, 0, 0),
-                scale: Vector3(1, 1, 1)
+                scale: Vector3(10, 10, 10)  // Scale up 10x for visibility test
             )
         )
     }

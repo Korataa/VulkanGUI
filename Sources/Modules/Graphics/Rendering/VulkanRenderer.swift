@@ -60,6 +60,12 @@ class VulkanRenderer {
 
     var swapchainImageViews: DynamicArray<VkImageView?>? = nil
 
+    // Depth buffer
+    var depthImage: VkImage? = nil
+    var depthImageMemory: VmaAllocation? = nil
+    var depthImageView: VkImageView? = nil
+    var depthFormat: VkFormat = VK_FORMAT_D32_SFLOAT
+
     //RenderPass
     var renderPass: VkRenderPass? = nil
     var pipelineLayout: VkPipelineLayout? = nil
@@ -222,6 +228,15 @@ same here 0       1
         vmaDestroyBuffer(vmaAllocator!, objectUBO, objectUBOMemory)
         vmaDestroyBuffer(vmaAllocator!, vertexBuffer, vertexBufferAllocation)
         vmaDestroyBuffer(vmaAllocator!, indexBuffer, indexBufferAllocation)
+        
+        // Cleanup depth resources
+        if let depthImageView = depthImageView {
+            vkDestroyImageView(logicalDevice, depthImageView, nil)
+        }
+        if let depthImage = depthImage, let depthImageMemory = depthImageMemory {
+            vmaDestroyImage(vmaAllocator!, depthImage, depthImageMemory)
+        }
+        
         vmaDestroyAllocator(vmaAllocator)
 
         //this also cleans up descriptorSet
@@ -287,6 +302,7 @@ same here 0       1
         //Swapchain and rendering infrastructure
         createSwapchain()
         createImageViews()
+        createDepthResources()
         createRenderPass()
 
         //pipeline creation stuff
@@ -1208,6 +1224,52 @@ same here 0       1
         print("swapchainImageViews.getLength(): \(swapchainImageViews!.getLength())")
     }
 
+    // Depth buffer creation
+    func createDepthResources() {
+        // Create depth image
+        var imageInfo = VkImageCreateInfo()
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
+        imageInfo.imageType = VK_IMAGE_TYPE_2D
+        imageInfo.extent.width = swapchainExtent!.width
+        imageInfo.extent.height = swapchainExtent!.height
+        imageInfo.extent.depth = 1
+        imageInfo.mipLevels = 1
+        imageInfo.arrayLayers = 1
+        imageInfo.format = depthFormat
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        imageInfo.usage = UInt32(VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT.rawValue)
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT
+        imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+        
+        var allocInfo = VmaAllocationCreateInfo()
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY
+        
+        let result = vmaCreateImage(vmaAllocator!, &imageInfo, &allocInfo, &depthImage, &depthImageMemory, nil)
+        if result != VK_SUCCESS {
+            fatalError("Failed to create depth image!")
+        }
+        
+        // Create depth image view
+        var viewInfo = VkImageViewCreateInfo()
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
+        viewInfo.image = depthImage
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D
+        viewInfo.format = depthFormat
+        viewInfo.subresourceRange.aspectMask = UInt32(VK_IMAGE_ASPECT_DEPTH_BIT.rawValue)
+        viewInfo.subresourceRange.baseMipLevel = 0
+        viewInfo.subresourceRange.levelCount = 1
+        viewInfo.subresourceRange.baseArrayLayer = 0
+        viewInfo.subresourceRange.layerCount = 1
+        
+        let viewResult = vkCreateImageView(logicalDevice, &viewInfo, nil, &depthImageView)
+        if viewResult != VK_SUCCESS {
+            fatalError("Failed to create depth image view!")
+        }
+        
+        print("Created depth buffer successfully!")
+    }
+
     //Render passes
     func createRenderPass() {
         var colorAttachment = VkAttachmentDescription()
@@ -1220,9 +1282,23 @@ same here 0       1
         colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
+        var depthAttachment = VkAttachmentDescription()
+        depthAttachment.format = depthFormat
+        depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR
+        depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE
+        depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE
+        depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE
+        depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+
         var colorAttachmentRef = VkAttachmentReference()
         colorAttachmentRef.attachment = 0
         colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+
+        var depthAttachmentRef = VkAttachmentReference()
+        depthAttachmentRef.attachment = 1
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
 
         var subpass = VkSubpassDescription()
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS
@@ -1230,12 +1306,16 @@ same here 0       1
         withUnsafePointer(to: &colorAttachmentRef) { pointer in
             subpass.pColorAttachments = pointer
         }
+        withUnsafePointer(to: &depthAttachmentRef) { pointer in
+            subpass.pDepthStencilAttachment = pointer
+        }
         
+        let attachments = [colorAttachment, depthAttachment]
         var renderPassInfo = VkRenderPassCreateInfo()
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO
-        renderPassInfo.attachmentCount = 1
-        withUnsafePointer(to: &colorAttachment) { pointer in
-            renderPassInfo.pAttachments = pointer
+        renderPassInfo.attachmentCount = 2
+        attachments.withUnsafeBufferPointer { pointer in
+            renderPassInfo.pAttachments = pointer.baseAddress
         }
         renderPassInfo.subpassCount = 1
         withUnsafePointer(to: &subpass) { pointer in
@@ -1246,11 +1326,11 @@ same here 0       1
         dependency.srcSubpass = VK_SUBPASS_EXTERNAL
         dependency.dstSubpass = 0
 
-        dependency.srcStageMask = UInt32(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.rawValue)
+        dependency.srcStageMask = UInt32(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.rawValue | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT.rawValue)
         dependency.srcAccessMask = 0
 
-        dependency.dstStageMask = UInt32(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.rawValue)
-        dependency.dstAccessMask = UInt32(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT.rawValue)
+        dependency.dstStageMask = UInt32(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.rawValue | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT.rawValue)
+        dependency.dstAccessMask = UInt32(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT.rawValue | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT.rawValue)
 
         renderPassInfo.dependencyCount = 1
         withUnsafePointer(to: &dependency) { ptr in
@@ -1594,7 +1674,7 @@ same here 0       1
         rasterizerInfo.rasterizerDiscardEnable = VK_FALSE
         rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL
         rasterizerInfo.lineWidth = 1.0
-        rasterizerInfo.cullMode = UInt32(VK_CULL_MODE_BACK_BIT.rawValue)  // Enable back-face culling
+        rasterizerInfo.cullMode = UInt32(VK_CULL_MODE_NONE.rawValue)  // Back-face culling
         rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE  // glTF standard
         rasterizerInfo.depthBiasEnable = VK_FALSE
 
@@ -1727,14 +1807,14 @@ same here 0       1
         swapchainFrameBuffers = DynamicArray<VkFramebuffer?>(repeating: VkFramebuffer(bitPattern: 0), count: UInt32(imageViewCount))
 
         for i in 0..<imageViewCount {
-            var attachments = swapchainImageViews?[i]
+            let attachments = [swapchainImageViews?[i], depthImageView]
 
             var frameBufferInfo = VkFramebufferCreateInfo()
             frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO
             frameBufferInfo.renderPass = renderPass
-            frameBufferInfo.attachmentCount = 1
-            withUnsafePointer(to: &attachments) { pointer in
-                frameBufferInfo.pAttachments = pointer
+            frameBufferInfo.attachmentCount = 2
+            attachments.withUnsafeBufferPointer { pointer in
+                frameBufferInfo.pAttachments = pointer.baseAddress
             }
             frameBufferInfo.width = swapchainExtent!.width
             frameBufferInfo.height = swapchainExtent!.height
@@ -2208,21 +2288,23 @@ same here 0       1
                     let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
                     updateMaterialUBO(at: materialOffset, material: material)
                     
-                    // Update material shader binding with texture
-                    mainShader?.getMaterialBinding()?.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
-                    
-                    // Bind material descriptor set with texture
-                    if let materialSet = mainShader?.getMaterialBinding()?.getDescriptorSet(frameIndex: currentFrame) {
-                        var descriptorSet: VkDescriptorSet? = materialSet
-                        var materialOffsetValue = UInt32(materialOffset)
-                        vkCmdBindDescriptorSets(
-                            commandBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout,
-                            2, // Set 2: materials
-                            1, &descriptorSet,
-                            1, &materialOffsetValue // Dynamic offset for material UBO
-                        )
+                    // Update material shader binding with texture - keep strong reference to prevent ARC deallocation
+                    if let materialBinding = mainShader?.getMaterialBinding() {
+                        materialBinding.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
+                        
+                        // Bind material descriptor set with texture
+                        if let materialSet = materialBinding.getDescriptorSet(frameIndex: currentFrame) {
+                            var descriptorSet: VkDescriptorSet? = materialSet
+                            var materialOffsetValue = UInt32(materialOffset)
+                            vkCmdBindDescriptorSets(
+                                commandBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipelineLayout,
+                                2, // Set 2: materials
+                                1, &descriptorSet,
+                                1, &materialOffsetValue // Dynamic offset for material UBO
+                            )
+                        }
                     }
                 }
 
@@ -2290,21 +2372,23 @@ same here 0       1
                     let materialOffset = Int(mesh.materialID) * Int(materialAlignment)
                     updateMaterialUBO(at: materialOffset, material: material)
                     
-                    // Update material shader binding with texture
-                    mainShader?.getMaterialBinding()?.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
-                    
-                    // Bind material descriptor set with texture
-                    if let materialSet = mainShader?.getMaterialBinding()?.getDescriptorSet(frameIndex: currentFrame) {
-                        var descriptorSet: VkDescriptorSet? = materialSet
-                        var materialOffsetValue = UInt32(materialOffset)
-                        vkCmdBindDescriptorSets(
-                            commandBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipelineLayout,
-                            2, // Set 2: materials
-                            1, &descriptorSet,
-                            1, &materialOffsetValue // Dynamic offset for material UBO
-                        )
+                    // Update material shader binding with texture - keep strong reference to prevent ARC deallocation
+                    if let materialBinding = mainShader?.getMaterialBinding() {
+                        materialBinding.update(material: material, textureIndex: material.baseColorTextureIndex, frameIndex: currentFrame)
+                        
+                        // Bind material descriptor set with texture
+                        if let materialSet = materialBinding.getDescriptorSet(frameIndex: currentFrame) {
+                            var descriptorSet: VkDescriptorSet? = materialSet
+                            var materialOffsetValue = UInt32(materialOffset)
+                            vkCmdBindDescriptorSets(
+                                commandBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipelineLayout,
+                                2, // Set 2: materials
+                                1, &descriptorSet,
+                                1, &materialOffsetValue // Dynamic offset for material UBO
+                            )
+                        }
                     }
                 }
 
@@ -2396,10 +2480,13 @@ same here 0       1
         renderPassInfo.renderArea.offset = VkOffset2D(x: 0, y: 0)
         renderPassInfo.renderArea.extent = swapchainExtent!
 
-        var clearColor = VkClearValue(color: VkClearColorValue(float32: (0.1, 0.2, 0.3, 1.0)))
-        renderPassInfo.clearValueCount = 1
-        withUnsafePointer(to: &clearColor) { ptr in
-            renderPassInfo.pClearValues = ptr
+        let clearValues = [
+            VkClearValue(color: VkClearColorValue(float32: (0.1, 0.2, 0.3, 1.0))),
+            VkClearValue(depthStencil: VkClearDepthStencilValue(depth: 1.0, stencil: 0))
+        ]
+        renderPassInfo.clearValueCount = 2
+        clearValues.withUnsafeBufferPointer { ptr in
+            renderPassInfo.pClearValues = ptr.baseAddress
         }
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE)
@@ -2408,16 +2495,18 @@ same here 0       1
         // Set viewport and scissor
         var viewport = VkViewport()
         viewport.x = 0.0
-        viewport.y = 0.0
+        viewport.y = 0.0  // Standard top-left origin
         viewport.width = Float(swapchainExtent!.width)
-        viewport.height = Float(swapchainExtent!.height)
+        viewport.height = Float(swapchainExtent!.height)  // Positive height
         viewport.minDepth = 0.0
         viewport.maxDepth = 1.0
+        
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport)
 
         var scissor = VkRect2D()
         scissor.offset = VkOffset2D(x: 0, y: 0)
         scissor.extent = swapchainExtent!
+        
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor)
 
         // Bind frame descriptor set (camera and lighting)
@@ -2540,5 +2629,13 @@ func vkResultToString(_ result: VkResult) -> String {
     case VK_ERROR_TOO_MANY_OBJECTS: return "Too Many Objects"
     case VK_ERROR_FORMAT_NOT_SUPPORTED: return "Format Not Supported"
     default: return "Unknown Vulkan error (\(result))"
+    }
+}
+
+// Add aspect ratio getter
+extension VulkanRenderer {
+    func getAspectRatio() -> Float {
+        guard let extent = swapchainExtent else { return 16.0 / 9.0 }  // Default fallback
+        return Float(extent.width) / Float(extent.height)
     }
 }

@@ -10,7 +10,7 @@ public class Camera {
     public var fovY: Float = 45.0
     public var fovX: Float?             //optional if derivable from aspect ratio
     public var aspect: Float = 16.0 / 9.0
-    public var nearZ: Float = 0.1
+    public var nearZ: Float = 1.0  // Increased from 0.1 to fix near plane clipping
     public var farZ: Float = 100.0
     public var graphicsBackend: GraphicsBackend = .Vulkan
 
@@ -37,28 +37,27 @@ public class Camera {
     }
 
     public var viewMatrix: Matrix4x4 {
+        let matrix: Matrix4x4
         switch graphicsBackend {
             case .Vulkan:
-                return lookAtRH(eye: position, target: target, up: up)
+                matrix = lookAtRH(eye: position, target: target, up: up)
             case .DirectX:
-                return lookAtLH(eye: position, target: target, up: up)
+                matrix = lookAtLH(eye: position, target: target, up: up)
         }
+        return matrix
     }
 
     public var projectionMatrix: Matrix4x4 {
         switch graphicsBackend {
             case .Vulkan:
-                // Vulkan needs Y-flipped projection
-                var proj = perspectiveRH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
-                proj.c1.y *= -1  // Flip Y axis for Vulkan clip space
-                return proj
+                return perspectiveRH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
             case .DirectX:
                 return perspectiveLH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
         }
     }
 
     public var viewProjectionMatrix: Matrix4x4 {
-        return projectionMatrix * viewMatrix
+        return projectionMatrix * viewMatrix  //Matrix multiplcaition is not commutative
     }
 
     ///Convenience method to update camera parameters
