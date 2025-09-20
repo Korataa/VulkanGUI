@@ -1,6 +1,6 @@
 //let cameraDistance: Float = 10.0  // Back to reasonable distanceThe Swift Programming Language
 // https://docs.swift.org/s// Camera orbit controls - Simple close position for debugging
-var cameraDistance: Float = 125.0  // Much closer for debugging
+var cameraDistance: Float = 5.0  // Much closer for debugging
 var cameraAngleY: Float = 0.0      // Horizontal rotation (around Y axis)
 var cameraAngleX: Float = 0.0      // Vertical rotation (pitch)
 let cameraTarget = Vector3(0.0, 0.0, 0.0)
@@ -37,7 +37,7 @@ let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceMa
 // Use ResourceSystem for all resource operations, not graphics.resourceManager directly
 let assetLoader = AssetLoader(resourceManager: resourceSystem.graphicsResourceManager)
 
-if let loadedModel = assetLoader.loadModel(at: "Assets/Models/CrateBox/scene.gltf") {
+if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf") {
     let model = assetLoader.createModel(from: loadedModel)
     
     // Set model to simple identity transform for debugging
