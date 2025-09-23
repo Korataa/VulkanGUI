@@ -1,8 +1,3 @@
-public enum GraphicsBackend {
-    case Vulkan
-    case DirectX
-}
-
 public class Camera {
     public var position: Vector3
     public var target: Vector3
@@ -43,6 +38,8 @@ public class Camera {
                 matrix = lookAtRH(eye: position, target: target, up: up)
             case .DirectX:
                 matrix = lookAtLH(eye: position, target: target, up: up)
+            case .Metal, .OpenGL:
+                fatalError("Graphics backend \(graphicsBackend) not supported yet")
         }
         return matrix
     }
@@ -53,6 +50,8 @@ public class Camera {
                 return perspectiveRH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
             case .DirectX:
                 return perspectiveLH_ZZeroOne(fovY: fovY, aspect: aspect, nearZ: nearZ, farZ: farZ)
+            case .Metal, .OpenGL:
+                fatalError("Graphics backend \(graphicsBackend) not supported yet")
         }
     }
 

@@ -23,6 +23,9 @@ public class Graphics {
             graphicsResourceManager: resourceManager
         )
     }
+
+    private var pipelineManager: PipelineManager!
+
     private var renderer: VulkanRenderer
     private var sdlContext: SDLContext
 
@@ -33,7 +36,6 @@ public class Graphics {
         return graphicsResourceManager!
     }
 
-    var pipelines: [any GraphicsPipeline] = []
     var renderModels: [Model] = []        //Models to render
     private var debugPrinted = false     // Only print debug info once
 
@@ -56,6 +58,9 @@ public class Graphics {
 
     public func initialize() {
         renderer.initialize()
+        
+        // Initialize pipeline manager with renderer reference
+        pipelineManager = PipelineManager(backend: .Vulkan, renderer: renderer)
         
         // Create resource manager after renderer is initialized with proper device context
         guard let device = renderer.logicalDevice,
@@ -82,15 +87,29 @@ public class Graphics {
         }
     }
 
-    func addPipeline(_ pipeline: any GraphicsPipeline) {
-        pipelines.append(pipeline)
-    }
-
     func render(commandBuffer: Any) {
-        for pipeline in pipelines {
-            pipeline.bind(commandBuffer: commandBuffer)
-            // Drawing commands would go here
-        }
+        // Example of using the new pipeline system
+        // You'll create pipeline descriptors based on what you need to render
+        
+        // Example: 3D graphics pipeline for models
+        let graphics3DDescriptor = PipelineDescriptor(
+            type: .Graphics3D,
+            vertexShader: nil, // You'll load these from your shader files
+            fragmentShader: nil,
+            blendMode: .None,
+            depthTest: true,
+            cullMode: .Back
+        )
+        
+        let pipeline3D = pipelineManager.createOrGetPipeline(
+            desc: graphics3DDescriptor,
+            device: renderer.logicalDevice
+        )
+        
+        pipeline3D.bind()
+        // Your 3D model rendering code would go here
+        // This is where you'd call renderer methods to actually draw
+        pipeline3D.unbind()
     }
 
     //Rendering stuff gets updated in here!!
@@ -143,9 +162,57 @@ public class Graphics {
     public func getAspectRatio() -> Float {
         return renderer.getAspectRatio()
     }
+    
+    // MARK: - Pipeline Helper Methods
+    
+    /// Create or get a 3D graphics pipeline for rendering models
+    private func get3DPipeline() -> Pipeline {
+        let descriptor = PipelineDescriptor(
+            type: .Graphics3D,
+            vertexShader: loadShaderIfNeeded("shader.vert"), // You'll implement this
+            fragmentShader: loadShaderIfNeeded("shader.frag"), // You'll implement this
+            blendMode: .None,
+            depthTest: true,
+            cullMode: .Back
+        )
+        return pipelineManager.createOrGetPipeline(desc: descriptor, device: renderer.logicalDevice)
+    }
+    
+    /// Create or get a 2D graphics pipeline for sprites
+    private func get2DPipeline() -> Pipeline {
+        let descriptor = PipelineDescriptor(
+            type: .Graphics2D,
+            vertexShader: loadShaderIfNeeded("sprite.vert"), // You'll implement this
+            fragmentShader: loadShaderIfNeeded("sprite.frag"), // You'll implement this
+            blendMode: .Alpha,
+            depthTest: false,
+            cullMode: .None
+        )
+        return pipelineManager.createOrGetPipeline(desc: descriptor, device: renderer.logicalDevice)
+    }
+    
+    /// Create or get a UI pipeline
+    private func getUIPipeline() -> Pipeline {
+        let descriptor = PipelineDescriptor(
+            type: .UI,
+            vertexShader: loadShaderIfNeeded("ui.vert"), // You'll implement this
+            fragmentShader: loadShaderIfNeeded("ui.frag"), // You'll implement this
+            blendMode: .Alpha,
+            depthTest: false,
+            cullMode: .None
+        )
+        return pipelineManager.createOrGetPipeline(desc: descriptor, device: renderer.logicalDevice)
+    }
+    
+    /// Helper to load shader source (you'll need to implement this based on how you load shaders)
+    private func loadShaderIfNeeded(_ filename: String) -> String? {
+        // TODO: Implement shader loading from your Assets/Shaders directory
+        // For now, return nil - the pipeline implementation should handle this
+        return nil
+    }
 
     public func cleanup() {
-
-
+        pipelineManager?.cleanupAllPipelines()
+        renderer.cleanup()
     }
 }
