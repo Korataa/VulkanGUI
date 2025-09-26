@@ -119,6 +119,10 @@ class VulkanRenderer {
     var dynamicAlignment: VkDeviceSize = 0
     var transformAlignment: VkDeviceSize = 0
     var materialAlignment: VkDeviceSize = 0
+    var transformAlignment2D: VkDeviceSize = 0
+    var transformAlignment3D: VkDeviceSize = 0
+    var materialAlignment2D: VkDeviceSize = 0
+    var materialAlignment3D: VkDeviceSize = 0
 
     // Material uploader for proper material system
     private var materialUploader: VulkanMaterialUploader?
@@ -144,6 +148,12 @@ class VulkanRenderer {
     var materialSetLayout3D: VkDescriptorSetLayout? = nil
     var materialSetLayout2D: VkDescriptorSetLayout? = nil
     var postProcessingSetLayout: VkDescriptorSetLayout? = nil
+    
+    // 2D and UI specific layouts
+    var transform2DSetLayout: VkDescriptorSetLayout? = nil    // For 2D projection + model matrix
+    var material2DSetLayout: VkDescriptorSetLayout? = nil     // For 2D material + texture
+    var uiProjectionSetLayout: VkDescriptorSetLayout? = nil   // For UI projection + screen size
+    var uiMaterialSetLayout: VkDescriptorSetLayout? = nil     // For UI material + texture
 
     private var portabilityCString = createUnsafeString("VK_KHR_portability_enumeration")
     private var debugUtilCString = createUnsafeString("VK_EXT_debug_utils")
@@ -346,6 +356,24 @@ same here 0       1
         
         // Set up the shader with vertex and fragment shaders
         try! setupMainShader()
+        
+        // Create descriptor set layouts for pipelines
+        createFrameLayout()
+        createTransformLayout()
+        createMaterialLayout3D()
+        createMaterialLayout2D()
+        
+        // Create 2D and UI specific layouts
+        createTransform2DLayout()
+        createMaterial2DLayout()
+        createUIProjectionLayout()
+        createUIMaterialLayout()
+        
+        // Create 2D and UI specific layouts
+        createTransform2DLayout()
+        createMaterial2DLayout()
+        createUIProjectionLayout()
+        createUIMaterialLayout()
         
         createCommandBuffers()
         createSyncObjects()
@@ -1486,7 +1514,120 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create material descriptor set layout!")
         }
-
+    }
+    
+    // 2D Transform Layout (Set 0 for 2D shaders: projection + model matrix)
+    func createTransform2DLayout() {
+        let transform2DBindings = [
+            VkDescriptorSetLayoutBinding(
+                binding: 0,
+                descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_VERTEX_BIT.rawValue),
+                pImmutableSamplers: nil
+            )
+        ]
+        
+        var layoutInfo = VkDescriptorSetLayoutCreateInfo()
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        layoutInfo.bindingCount = 1
+        transform2DBindings.withUnsafeBufferPointer { ptr in
+            layoutInfo.pBindings = ptr.baseAddress
+        }
+        
+        let result = vkCreateDescriptorSetLayout(logicalDevice, &layoutInfo, nil, &transform2DSetLayout)
+        if result != VK_SUCCESS {
+            fatalError("Failed to create 2D transform descriptor set layout!")
+        }
+    }
+    
+    // 2D Material Layout (Set 1 for 2D shaders: material data + texture)
+    func createMaterial2DLayout() {
+        let material2DBindings = [
+            VkDescriptorSetLayoutBinding(
+                binding: 0,
+                descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            ),
+            VkDescriptorSetLayoutBinding(
+                binding: 1,
+                descriptorType: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            )
+        ]
+        
+        var layoutInfo = VkDescriptorSetLayoutCreateInfo()
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        layoutInfo.bindingCount = 2
+        material2DBindings.withUnsafeBufferPointer { ptr in
+            layoutInfo.pBindings = ptr.baseAddress
+        }
+        
+        let result = vkCreateDescriptorSetLayout(logicalDevice, &layoutInfo, nil, &material2DSetLayout)
+        if result != VK_SUCCESS {
+            fatalError("Failed to create 2D material descriptor set layout!")
+        }
+    }
+    
+    // UI Projection Layout (Set 0 for UI shaders: projection + screen size)
+    func createUIProjectionLayout() {
+        let uiProjectionBindings = [
+            VkDescriptorSetLayoutBinding(
+                binding: 0,
+                descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_VERTEX_BIT.rawValue),
+                pImmutableSamplers: nil
+            )
+        ]
+        
+        var layoutInfo = VkDescriptorSetLayoutCreateInfo()
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        layoutInfo.bindingCount = 1
+        uiProjectionBindings.withUnsafeBufferPointer { ptr in
+            layoutInfo.pBindings = ptr.baseAddress
+        }
+        
+        let result = vkCreateDescriptorSetLayout(logicalDevice, &layoutInfo, nil, &uiProjectionSetLayout)
+        if result != VK_SUCCESS {
+            fatalError("Failed to create UI projection descriptor set layout!")
+        }
+    }
+    
+    // UI Material Layout (Set 1 for UI shaders: material data + texture)
+    func createUIMaterialLayout() {
+        let uiMaterialBindings = [
+            VkDescriptorSetLayoutBinding(
+                binding: 0,
+                descriptorType: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            ),
+            VkDescriptorSetLayoutBinding(
+                binding: 1,
+                descriptorType: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                descriptorCount: 1,
+                stageFlags: UInt32(VK_SHADER_STAGE_FRAGMENT_BIT.rawValue),
+                pImmutableSamplers: nil
+            )
+        ]
+        
+        var layoutInfo = VkDescriptorSetLayoutCreateInfo()
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        layoutInfo.bindingCount = 2
+        uiMaterialBindings.withUnsafeBufferPointer { ptr in
+            layoutInfo.pBindings = ptr.baseAddress
+        }
+        
+        let result = vkCreateDescriptorSetLayout(logicalDevice, &layoutInfo, nil, &uiMaterialSetLayout)
+        if result != VK_SUCCESS {
+            fatalError("Failed to create UI material descriptor set layout!")
+        }
     }
 
     func createPostProcessingLayout() {
@@ -1528,143 +1669,11 @@ same here 0       1
         }
     }
 
-    func createDescriptorSet(for pipelineType: PipelineType) {
-        var layoutsForAllocation = DynamicArray<VkDescriptorSetLayout?>()
-        var poolSizes = DynamicArray<VkDescriptorPoolSize>()
-        var setCount: UInt32 = 0
-
-        switch pipelineType {
-            case .Graphics3D:
-                //Create frame, transform, and material layouts?
-                createFrameLayout()
-                createTransformLayout()
-                createMaterialLayout3D()
-
-                layoutsForAllocation.append(frameSetLayout!)
-                layoutsForAllocation.append(transformSetLayout!)
-                layoutsForAllocation.append(materialSetLayout3D!)
-                setCount = 3
-
-                // Add pool sizes for 3D
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1)) // Frame data
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) // Transform data
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) // Material UBO
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 1)) // Material texture
-
-            case .Graphics2D:
-                //create frame, transform, and material layouts
-                createFrameLayout()
-                createTransformLayout()
-                createMaterialLayout2D()
-
-                layoutsForAllocation.append(frameSetLayout!)        //Camera matrices for 2d world
-                layoutsForAllocation.append(transformSetLayout!)    //2d world positioning, I think its a ubo
-                layoutsForAllocation.append(materialSetLayout2D!)   //Simple textures, it hink its another ubo
-                setCount = 3
-
-                // Add pool sizes for 2D
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1))         // Frame data
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) // Transform data
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) // 2D Material UBO
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 1)) // 2D Material texture
-
-            case .UI:
-                //Needs transform and material layouts - no camera needed
-                createTransformLayout()                             //Screen space positioning only
-                createMaterialLayout2D()
-
-                layoutsForAllocation.append(transformSetLayout!)
-                layoutsForAllocation.append(materialSetLayout2D!)
-                setCount = 2
-
-                //Add pool sizes for UI
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) //Transform data
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount: 1)) //UI Material UBO
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 1)) //UI Material texture
-
-            case .PostProcessing:
-                createPostProcessingLayout()
-
-                layoutsForAllocation.append(postProcessingSetLayout!)
-                setCount = 1
-
-                // Add pool sizes for post-processing
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount: 2)) // Input textures
-                poolSizes.append(VkDescriptorPoolSize(type: VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount: 1)) // Post-processing
-
-            case .Compute:
-                // TODO: Implement compute pipeline descriptor set creation
-                fatalError("Compute pipeline not supported yet!")
-        }
-
-        //Now we create the actual descriptor pool and allocate the sets
-
-        //Create descriptor pool
-        var poolInfo = VkDescriptorPoolCreateInfo()
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO
-        poolInfo.poolSizeCount = UInt32(poolSizes.getLength())
-        poolInfo.pPoolSizes = poolSizes.getDataAsConstPointer()
-        poolInfo.maxSets = setCount
-
-        let poolResult = vkCreateDescriptorPool(logicalDevice, &poolInfo, nil, &descriptorPool)
-        if poolResult != VK_SUCCESS {
-            fatalError("Failed to create descriptor pool for \(pipelineType)!")
-        }
-
-        //Allocate descriptor sets
-        var allocInfo = VkDescriptorSetAllocateInfo()
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO
-        allocInfo.descriptorPool = descriptorPool!
-        allocInfo.descriptorSetCount = setCount
-        allocInfo.pSetLayouts = layoutsForAllocation.getDataAsConstPointer()
-
-        let sets = DynamicArray<VkDescriptorSet?>(repeating: nil, count: UInt32(setCount))
-        let alocResult = vkAllocateDescriptorSets(logicalDevice, &allocInfo, sets.getData())
-        if alocResult != VK_SUCCESS {
-            fatalError("Failed to allocate descriptor sets for \(pipelineType)!")
-        }
-
-        // Assign descriptor sets based on pipeline type
-        switch pipelineType {
-            case .Graphics3D, .Graphics2D:
-                frameDescriptorSet = sets[0]
-                transformDescriptorSet = sets[1]
-                materialDescriptorSet = sets[2]
-
-            case .UI:
-                transformDescriptorSet = sets[0]
-                materialDescriptorSet = sets[1]
-
-            case .PostProcessing:
-                materialDescriptorSet = sets[0]
-
-            case .Compute:
-                break       // Not supported yet
-        }
-
-        //Now update the descriptor sets with actual buffer bindings
-        updateDescriptorSets(for: pipelineType)
-    }
-
-    //Helper function to update descriptor sets with actual buffer bindings
-    private func updateDescriptorSets(for pipelineType: PipelineType) {
-        switch pipelineType {
-            case .Graphics3D, .Graphics2D:
-                updateFrameDescriptorSet()
-                updateTransformDescriptorSet()
-                updateMaterialDescriptorSet(for : pipelineType)
-
-            case .UI:
-                updateTransformDescriptorSet()
-                updateMaterialDescriptorSet(for : pipelineType)
-
-            case .PostProcessing:
-                updateMaterialDescriptorSet(for : pipelineType)
-
-            case .Compute: 
-                break       // Not supported yet
-        }
-    }
+    // REMOVED: Old high-level pipeline methods
+    // - createDescriptorSet(for pipelineType: PipelineType)  
+    // - updateDescriptorSets(for pipelineType: PipelineType)
+    // - updateMaterialDescriptorSet(for pipelineType: PipelineType)
+    // These have been replaced with low-level methods that VulkanPipelineImpl calls directly
 
     private func updateFrameDescriptorSet() {
         guard let frameDescriptorSet = frameDescriptorSet else {
@@ -1718,109 +1727,8 @@ same here 0       1
         print("Updated transform descriptor set!")
     }
 
-    private func updateMaterialDescriptorSet(for pipelineType: PipelineType) {
-        guard let materialDescriptorSet = materialDescriptorSet else {
-            fatalError("Material descriptor set not allocated!")
-        }
-
-        var descriptorWrites: [VkWriteDescriptorSet] = []
-
-        switch pipelineType {
-            case .Graphics3D:
-                // 3D Materials: UBO (binding 0) + Texture (binding 1)
-                var materialDescriptorWrite = VkWriteDescriptorSet()
-                materialDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-                materialDescriptorWrite.dstSet = materialDescriptorSet
-                materialDescriptorWrite.dstBinding = 0 // Binding 0 for material UBO
-                materialDescriptorWrite.dstArrayElement = 0
-                materialDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-                materialDescriptorWrite.descriptorCount = 1
-
-                var materialBufferInfo = VkDescriptorBufferInfo()
-                materialBufferInfo.buffer = materialUBO3D
-                materialBufferInfo.offset = 0
-                materialBufferInfo.range = VkDeviceSize(MemoryLayout<MaterialConstants3D>.size)
-
-                descriptorWrites.append(materialDescriptorWrite)
-
-                //3D texture binding
-                var textureDescriptorWrite = VkWriteDescriptorSet()
-                textureDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-                textureDescriptorWrite.dstSet = materialDescriptorSet
-                textureDescriptorWrite.dstBinding = 1 // Binding 1 for texture sampler
-                textureDescriptorWrite.dstArrayElement = 0
-                textureDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-                textureDescriptorWrite.descriptorCount = 1
-
-                descriptorWrites.append(textureDescriptorWrite)
-
-                // Update both descriptors
-                var imageInfo = VkDescriptorImageInfo()
-                if let defaultTexture = textureManager?.getDefaultTexture() {
-                    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                    imageInfo.imageView = defaultTexture.imageView
-                    imageInfo.sampler = defaultTexture.sampler
-
-                    //Set buffer info first
-                    withUnsafePointer(to: &materialBufferInfo) { ptr in
-                        descriptorWrites[0].pBufferInfo = ptr
-
-                        //set image info second
-                        withUnsafePointer(to: &imageInfo) { ptr in
-                            descriptorWrites[1].pImageInfo = ptr
-
-                            //now update all at once
-                            vkUpdateDescriptorSets(logicalDevice, UInt32(descriptorWrites.count), descriptorWrites, 0, nil)
-                        }
-                    }
-                } else {
-                    fatalError("No default texture available!")
-                }
-
-            case .Graphics2D, .UI:
-                // 2D/UI Materials: UBO (binding 0) + Texture (binding 1)
-                var materialDescriptorWrite2D = VkWriteDescriptorSet()
-                materialDescriptorWrite2D.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-                materialDescriptorWrite2D.dstSet = materialDescriptorSet
-                materialDescriptorWrite2D.dstBinding = 0 // Binding 0 for material UBO
-                materialDescriptorWrite2D.dstArrayElement = 0
-                materialDescriptorWrite2D.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-                materialDescriptorWrite2D.descriptorCount = 1
-
-                var materialBufferInfo2D = VkDescriptorBufferInfo()
-                materialBufferInfo2D.buffer = materialUBO2D
-                materialBufferInfo2D.offset = 0
-                materialBufferInfo2D.range = VkDeviceSize(MemoryLayout<MaterialConstants2D>.size)
-
-                descriptorWrites.append(materialDescriptorWrite2D)
-
-                // 2D texture binding
-                var textureDescriptorWrite2D = VkWriteDescriptorSet()
-                textureDescriptorWrite2D.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
-                textureDescriptorWrite2D.dstSet = materialDescriptorSet
-                textureDescriptorWrite2D.dstBinding = 1 // Binding 1 for texture sampler
-                textureDescriptorWrite2D.dstArrayElement = 0
-                textureDescriptorWrite2D.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-                textureDescriptorWrite2D.descriptorCount = 1
-
-                descriptorWrites.append(textureDescriptorWrite2D)
-
-                //update both descriptors (similar to 3D)
-                // ... texture binding code similar to above...
-                print("Updated 2D/UI material descriptor set with UBO!")
-
-            case .PostProcessing:
-                // Post-Processing: Two textures (bindings 0 and 1) + UBO
-                //TODO: implement post-processing descriptor set update
-                fatalError("Post-processing descriptor set update not implemented yet!")
-
-            case .Compute:
-                fatalError("Compute pipeline not supported yet!")
-        }
-
-    }
-
-
+    // REMOVED: updateMaterialDescriptorSet(for pipelineType: PipelineType)
+    // High-level method removed - VulkanPipelineImpl handles descriptor set creation directly
 
     func createShaderModule(code: inout DynamicArray<UInt8>) -> VkShaderModule? {
         var createInfo: VkShaderModuleCreateInfo = VkShaderModuleCreateInfo()
@@ -2086,7 +1994,7 @@ same here 0       1
         transformAlignment = (transformRawSize + minAlignment - 1) & ~(minAlignment - 1)
 
         // Calculate alignment for material UBO  
-        let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants>.size)
+        let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants3D>.size)
         materialAlignment = (materialRawSize + minAlignment - 1) & ~(minAlignment - 1)
 
         print("Transform UBO entry uses \(transformAlignment) bytes")
@@ -2103,12 +2011,30 @@ same here 0       1
         let transformRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<TransformConstants>.size)
         transformAlignment2D = (transformRawSize + minAlignment - 1) & ~(minAlignment - 1)
 
-        //Calculate alignment for 2D material)
+        //Calculate alignment for 2D material UBO
         let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants2D>.size)
+        materialAlignment2D = (materialRawSize + minAlignment - 1) & ~(minAlignment - 1)
+
+        print("2D Transform UBO entry uses \(transformAlignment2D) bytes")
+        print("2D Material UBO entry uses \(materialAlignment2D) bytes")
+    }
+
+    func calculateAlignment3D() {
+        var properties = VkPhysicalDeviceProperties()
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties)
+
+        let minAlignment = properties.limits.minUniformBufferOffsetAlignment
+
+        //Calculate alignment for 3D transform UBO
+        let transformRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<TransformConstants>.size)
+        transformAlignment3D = (transformRawSize + minAlignment - 1) & ~(minAlignment - 1)
+
+        //Calculate alignment for 3D material UBO
+        let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants3D>.size)
         materialAlignment3D = (materialRawSize + minAlignment - 1) & ~(minAlignment - 1)
 
-        print("Transform UBO entry uses \(transformAlignment2D) bytes")
-        print("Material UBO entry uses \(materialAlignment3D) bytes")
+        print("3D Transform UBO entry uses \(transformAlignment3D) bytes")
+        print("3D Material UBO entry uses \(materialAlignment3D) bytes")
     }
 
     private var transformDebugCounter = 0
@@ -2322,6 +2248,8 @@ same here 0       1
         
         print("DEBUG: Processing \(models.count) models")
         
+        // TODO: Implement proper model sorting and rendering after pipeline setup
+        /*
         for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
             resourceManager.withStaticVertexBuffer { staticBuffer in
@@ -2401,7 +2329,7 @@ same here 0       1
         }
 
         //Reset material tracking for dynamic objects
-        currentMaterialID = UInt32.max
+        // currentMaterialID = UInt32.max
 
         //for dynamic meshes
         for model in sortedModels where model.isDynamic && model.isVisible(in: frustum) {
@@ -2549,6 +2477,8 @@ same here 0       1
             
             currentTransformIndex += 1
         }
+    }
+    */
     }
 
     //Synchronization shit
@@ -2721,17 +2651,274 @@ same here 0       1
         depthTest: Bool,
         blendMode: String
     ) -> (VkPipeline?, VkPipelineLayout?) {
-        // TODO: Implement low-level pipeline creation using these raw parameters
-        // This will contain the actual Vulkan pipeline creation logic
-        // without knowing about PipelineDescriptor
         
-        fatalError("Low-level createGraphicsPipeline not implemented yet")
+        // Load shaders
+        guard let assetsPath = getAssetsPath() else {
+            print("Failed to get assets path")
+            return (nil, nil)
+        }
+        
+        let vertShaderFullPath = "\(assetsPath)/Shaders/\(vertexShaderPath)"
+        let fragShaderFullPath = "\(assetsPath)/Shaders/\(fragmentShaderPath)"
+        
+        guard var vertShaderCode = try? readFile(filename: vertShaderFullPath),
+              var fragShaderCode = try? readFile(filename: fragShaderFullPath) else {
+            print("Failed to load shaders: \(vertShaderFullPath), \(fragShaderFullPath)")
+            return (nil, nil)
+        }
+        
+        // Create shader modules
+        let vertShaderModule = createShaderModule(code: &vertShaderCode)
+        let fragShaderModule = createShaderModule(code: &fragShaderCode)
+        
+        defer {
+            if let vertModule = vertShaderModule {
+                vkDestroyShaderModule(logicalDevice, vertModule, nil)
+            }
+            if let fragModule = fragShaderModule {
+                vkDestroyShaderModule(logicalDevice, fragModule, nil)
+            }
+        }
+        
+        guard let vertModule = vertShaderModule,
+              let fragModule = fragShaderModule else {
+            print("Failed to create shader modules")
+            return (nil, nil)
+        }
+        
+        // Create shader stages
+        var vertShaderStageInfo = VkPipelineShaderStageCreateInfo()
+        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT
+        vertShaderStageInfo.module = vertModule
+        vertShaderStageInfo.pName = UnsafePointer(shaderEntryPointName)
+        
+        var fragShaderStageInfo = VkPipelineShaderStageCreateInfo()
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT
+        fragShaderStageInfo.module = fragModule
+        fragShaderStageInfo.pName = UnsafePointer(shaderEntryPointName)
+        
+        var shaderStages = [vertShaderStageInfo, fragShaderStageInfo]
+        
+        // Vertex input based on vertexInputType
+        var vertexInputInfo = VkPipelineVertexInputStateCreateInfo()
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+        
+        var bindingDescriptions: [VkVertexInputBindingDescription] = []
+        var attributeDescriptions: [VkVertexInputAttributeDescription] = []
+        
+        switch vertexInputType {
+        case "Vertex3D":
+            // 3D vertex: position(12) + normal(12) + texcoord(8) = 32 bytes
+            bindingDescriptions = [
+                VkVertexInputBindingDescription(
+                    binding: 0,
+                    stride: 32,
+                    inputRate: VK_VERTEX_INPUT_RATE_VERTEX
+                )
+            ]
+            attributeDescriptions = [
+                // Position at location 0
+                VkVertexInputAttributeDescription(
+                    location: 0,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32B32_SFLOAT,
+                    offset: 0
+                ),
+                // Normal at location 1
+                VkVertexInputAttributeDescription(
+                    location: 1,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32B32_SFLOAT,
+                    offset: 12
+                ),
+                // TexCoord at location 2
+                VkVertexInputAttributeDescription(
+                    location: 2,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32_SFLOAT,
+                    offset: 24
+                )
+            ]
+        case "Vertex2D":
+            // 2D vertex: position(8) + texcoord(8) = 16 bytes
+            bindingDescriptions = [
+                VkVertexInputBindingDescription(
+                    binding: 0,
+                    stride: 16,
+                    inputRate: VK_VERTEX_INPUT_RATE_VERTEX
+                )
+            ]
+            attributeDescriptions = [
+                // Position at location 0
+                VkVertexInputAttributeDescription(
+                    location: 0,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32_SFLOAT,
+                    offset: 0
+                ),
+                // TexCoord at location 1
+                VkVertexInputAttributeDescription(
+                    location: 1,
+                    binding: 0,
+                    format: VK_FORMAT_R32G32_SFLOAT,
+                    offset: 8
+                )
+            ]
+        default:
+            // Fallback to no vertex input
+            break
+        }
+        
+        vertexInputInfo.vertexBindingDescriptionCount = UInt32(bindingDescriptions.count)
+        vertexInputInfo.vertexAttributeDescriptionCount = UInt32(attributeDescriptions.count)
+        
+        if bindingDescriptions.isEmpty {
+            vertexInputInfo.pVertexBindingDescriptions = nil
+        } else {
+            bindingDescriptions.withUnsafeBufferPointer { ptr in
+                vertexInputInfo.pVertexBindingDescriptions = ptr.baseAddress
+            }
+        }
+        
+        if attributeDescriptions.isEmpty {
+            vertexInputInfo.pVertexAttributeDescriptions = nil
+        } else {
+            attributeDescriptions.withUnsafeBufferPointer { ptr in
+                vertexInputInfo.pVertexAttributeDescriptions = ptr.baseAddress
+            }
+        }
+        
+        // Input assembly
+        var inputAssembly = VkPipelineInputAssemblyStateCreateInfo()
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+        inputAssembly.primitiveRestartEnable = VK_FALSE
+        
+        // Viewport and scissor (dynamic)
+        var viewportState = VkPipelineViewportStateCreateInfo()
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO
+        viewportState.viewportCount = 1
+        viewportState.scissorCount = 1
+        
+        // Rasterizer
+        var rasterizer = VkPipelineRasterizationStateCreateInfo()
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO
+        rasterizer.depthClampEnable = VK_FALSE
+        rasterizer.rasterizerDiscardEnable = VK_FALSE
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL
+        rasterizer.lineWidth = 1.0
+        rasterizer.cullMode = cullMode
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
+        rasterizer.depthBiasEnable = VK_FALSE
+        
+        // Multisampling
+        var multisampling = VkPipelineMultisampleStateCreateInfo()
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO
+        multisampling.sampleShadingEnable = VK_FALSE
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+        
+        // Depth stencil
+        var depthStencil = VkPipelineDepthStencilStateCreateInfo()
+        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
+        depthStencil.depthTestEnable = depthTest ? VK_TRUE : VK_FALSE
+        depthStencil.depthWriteEnable = depthTest ? VK_TRUE : VK_FALSE
+        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS
+        depthStencil.depthBoundsTestEnable = VK_FALSE
+        depthStencil.stencilTestEnable = VK_FALSE
+        
+        // Color blending
+        var colorBlendAttachment = VkPipelineColorBlendAttachmentState()
+        colorBlendAttachment.colorWriteMask = UInt32(VK_COLOR_COMPONENT_R_BIT.rawValue | 
+                                                     VK_COLOR_COMPONENT_G_BIT.rawValue | 
+                                                     VK_COLOR_COMPONENT_B_BIT.rawValue | 
+                                                     VK_COLOR_COMPONENT_A_BIT.rawValue)
+        
+        // Set blend mode based on parameter
+        if blendMode == "alpha" {
+            colorBlendAttachment.blendEnable = VK_TRUE
+            colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA
+            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+            colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD
+            colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE
+            colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO
+            colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD
+        } else {
+            colorBlendAttachment.blendEnable = VK_FALSE
+        }
+        
+        var colorBlending = VkPipelineColorBlendStateCreateInfo()
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO
+        colorBlending.logicOpEnable = VK_FALSE
+        colorBlending.attachmentCount = 1
+        withUnsafePointer(to: &colorBlendAttachment) { colorBlending.pAttachments = $0 }
+        
+        // Dynamic state
+        var dynamicStates = [VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR]
+        var dynamicState = VkPipelineDynamicStateCreateInfo()
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO
+        dynamicState.dynamicStateCount = UInt32(dynamicStates.count)
+        dynamicStates.withUnsafeBufferPointer { dynamicState.pDynamicStates = $0.baseAddress }
+        
+        // Pipeline layout
+        var pipelineLayoutInfo = VkPipelineLayoutCreateInfo()
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
+        
+        // Filter out nil descriptor set layouts
+        let validLayouts = descriptorSetLayouts.compactMap { $0 }
+        pipelineLayoutInfo.setLayoutCount = UInt32(validLayouts.count)
+        if !validLayouts.isEmpty {
+            validLayouts.withUnsafeBufferPointer { layoutPtr in
+                pipelineLayoutInfo.pSetLayouts = layoutPtr.baseAddress?.withMemoryRebound(to: VkDescriptorSetLayout?.self, capacity: validLayouts.count) { $0 }
+            }
+        }
+        
+        var pipelineLayout: VkPipelineLayout? = nil
+        var layoutResult = vkCreatePipelineLayout(logicalDevice, &pipelineLayoutInfo, nil, &pipelineLayout)
+        if layoutResult != VK_SUCCESS {
+            print("Failed to create pipeline layout!")
+            return (nil, nil)
+        }
+        
+        // Create graphics pipeline
+        var pipelineInfo = VkGraphicsPipelineCreateInfo()
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
+        pipelineInfo.stageCount = UInt32(shaderStages.count)
+        shaderStages.withUnsafeBufferPointer { stagePtr in
+            pipelineInfo.pStages = stagePtr.baseAddress
+        }
+        pipelineInfo.pVertexInputState = withUnsafePointer(to: &vertexInputInfo) { $0 }
+        pipelineInfo.pInputAssemblyState = withUnsafePointer(to: &inputAssembly) { $0 }
+        pipelineInfo.pViewportState = withUnsafePointer(to: &viewportState) { $0 }
+        pipelineInfo.pRasterizationState = withUnsafePointer(to: &rasterizer) { $0 }
+        pipelineInfo.pMultisampleState = withUnsafePointer(to: &multisampling) { $0 }
+        pipelineInfo.pDepthStencilState = withUnsafePointer(to: &depthStencil) { $0 }
+        pipelineInfo.pColorBlendState = withUnsafePointer(to: &colorBlending) { $0 }
+        pipelineInfo.pDynamicState = withUnsafePointer(to: &dynamicState) { $0 }
+        pipelineInfo.layout = pipelineLayout!
+        pipelineInfo.renderPass = renderPass!
+        pipelineInfo.subpass = 0
+        
+        var pipeline: VkPipeline? = nil
+        var pipelineResult = vkCreateGraphicsPipelines(logicalDevice, nil, 1, &pipelineInfo, nil, &pipeline)
+        if pipelineResult != VK_SUCCESS {
+            print("Failed to create graphics pipeline!")
+            if let layout = pipelineLayout {
+                vkDestroyPipelineLayout(logicalDevice, layout, nil)
+            }
+            return (nil, nil)
+        }
+        
+        print("Successfully created low-level Vulkan graphics pipeline")
+        return (pipeline, pipelineLayout)
     }
 
     func waitIdle() {
         //have to wait for logicalDevice to be idle before destroying everything!
         vkDeviceWaitIdle(logicalDevice)
     }
+
     
     // Create Vulkan textures from loaded texture data in ResourceManager
     public func createTexturesFromResourceManager() {

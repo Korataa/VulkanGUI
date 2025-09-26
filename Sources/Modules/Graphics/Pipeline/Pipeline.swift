@@ -148,8 +148,10 @@ final class VulkanPipelineImpl: Pipeline {
         switch type {
         case .Graphics3D:
             return ("vert.spv", "frag.spv")
-        case .Graphics2D, .UI:
-            return ("vert.spv", "frag.spv") // TODO: Add dedicated 2D/UI shaders
+        case .Graphics2D:
+            return ("shader2d_vert.spv", "shader2d_frag.spv")
+        case .UI:
+            return ("ui_vert.spv", "ui_frag.spv")
         case .PostProcessing, .Compute:
             fatalError("PostProcessing and Compute pipelines not implemented yet")
         }
@@ -170,8 +172,10 @@ final class VulkanPipelineImpl: Pipeline {
         switch type {
         case .Graphics3D:
             return [vulkanRenderer.frameSetLayout, vulkanRenderer.transformSetLayout, vulkanRenderer.materialSetLayout3D]
-        case .Graphics2D, .UI:
-            return [vulkanRenderer.frameSetLayout, vulkanRenderer.materialSetLayout2D]
+        case .Graphics2D:
+            return [vulkanRenderer.transform2DSetLayout, vulkanRenderer.material2DSetLayout]
+        case .UI:
+            return [vulkanRenderer.uiProjectionSetLayout, vulkanRenderer.uiMaterialSetLayout]
         case .PostProcessing:
             return [vulkanRenderer.postProcessingSetLayout]
         case .Compute:
@@ -260,7 +264,7 @@ final class VulkanPipelineImpl: Pipeline {
         bind()
         
         // Delegate actual rendering to VulkanRenderer's new simplified method
-        vulkanRenderer.render(models: models)
+        vulkanRenderer.renderSimple(models: models)
     }
 
     func unbind() {

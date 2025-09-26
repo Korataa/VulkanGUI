@@ -228,6 +228,36 @@ public class Graphics {
         return nil
     }
 
+    // MARK: - Pipeline Testing
+    
+    /// Test both 3D and UI pipeline creation - call this after initialize()  
+    public func testPipelineCreation() {
+        print("=== Testing Pipeline Creation ===")
+        
+        // Test 3D pipeline creation
+        print("Creating 3D graphics pipeline...")
+        let pipeline3D = get3DPipeline()
+        print("✅ 3D pipeline created successfully: \(type(of: pipeline3D))")
+        
+        // Test UI pipeline creation  
+        print("Creating UI pipeline...")
+        let pipelineUI = getUIPipeline()
+        print("✅ UI pipeline created successfully: \(type(of: pipelineUI))")
+        
+        // Test basic pipeline binding
+        print("Testing pipeline binding...")
+        pipeline3D.bind()
+        print("✅ 3D pipeline bound successfully")
+        
+        pipelineUI.bind()  
+        print("✅ UI pipeline bound successfully")
+        
+        pipeline3D.unbind()
+        pipelineUI.unbind()
+        
+        print("=== Pipeline Test Complete ===")
+    }
+
     public func cleanup() {
         pipelineManager?.cleanupAllPipelines()
         renderer.cleanup()

@@ -31,6 +31,9 @@ let eventManager = EventManager(sdlContext)
 let graphics = Graphics(sdlContext: sdlContext)
 graphics.initialize()
 
+// Test our new pipeline architecture
+graphics.testPipelineCreation()
+
 // Create ResourceSystem using graphics resource manager (high-level orchestrator)
 let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceManager)
 
