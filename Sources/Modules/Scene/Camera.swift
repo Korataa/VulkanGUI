@@ -75,9 +75,9 @@ extension Camera: CustomDebugStringConvertible {
           position: \(position), 
           target: \(target),
           up: \(up), 
-          fovY: \(fovY)° ⚠️ DEFAULT, 
-          nearZ: \(nearZ) ⚠️ DEFAULT,
-          farZ: \(farZ) ⚠️ DEFAULT
+          fovY: \(fovY)  DEFAULT, 
+          nearZ: \(nearZ)  DEFAULT,
+          farZ: \(farZ)  DEFAULT
         )
         """
     }

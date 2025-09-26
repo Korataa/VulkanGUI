@@ -87,38 +87,53 @@ public class Graphics {
         }
     }
 
-    func render(commandBuffer: Any) {
-        // Example of using the new pipeline system
-        // You'll create pipeline descriptors based on what you need to render
-        
-        // Example: 3D graphics pipeline for models
-        let graphics3DDescriptor = PipelineDescriptor(
-            type: .Graphics3D,
-            vertexShader: nil, // You'll load these from your shader files
-            fragmentShader: nil,
-            blendMode: .None,
-            depthTest: true,
-            cullMode: .Back
-        )
-        
-        let pipeline3D = pipelineManager.createOrGetPipeline(
-            desc: graphics3DDescriptor,
-            device: renderer.logicalDevice
-        )
-        
-        pipeline3D.bind()
-        // Your 3D model rendering code would go here
-        // This is where you'd call renderer methods to actually draw
-        pipeline3D.unbind()
+    // MARK: - High-Level Rendering API
+    
+    /// Render a single 3D model - this is the high-level API game code uses
+    public func render3DModel(_ model: Model) {
+        let pipeline = get3DPipeline()
+        if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+            vulkanPipeline.render(models: [model])
+        }
+    }
+    
+    /// Render multiple 3D models efficiently 
+    public func render3DModels(_ models: [Model]) {
+        if !models.isEmpty {
+            let pipeline = get3DPipeline()
+            if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                vulkanPipeline.render(models: models)
+            }
+        }
+    }
+    
+    /// Render a 2D sprite - high-level API for 2D rendering
+    public func render2DSprite(at position: (Float, Float), size: (Float, Float), textureID: UInt32? = nil) {
+        // TODO: Create a simple quad model for 2D sprites and render it with the 2D pipeline
+        let pipeline = get2DPipeline()
+        pipeline.bind()
+        // Implementation would create a quad mesh and render it
+        pipeline.unbind()
+    }
+    
+    /// Render UI element - high-level API for UI rendering  
+    public func renderUIElement(at position: (Float, Float), size: (Float, Float), textureID: UInt32? = nil) {
+        let pipeline = getUIPipeline()
+        pipeline.bind()
+        // Implementation would create UI quad and render it
+        pipeline.unbind()
     }
 
     //Rendering stuff gets updated in here!!
     public func update() {
         // Begin frame and get swapchain image index
-        guard let imageIndex = renderer.beginFrame() else {
+        guard let imageIndex = renderer.acquireFrame() else {
             // Frame was skipped (swapchain recreation, etc.)
             return
         }
+        
+        // Begin render pass
+        renderer.beginRenderPass(imageIndex: imageIndex)
         
         // Debug: Print model count and details
         if !renderModels.isEmpty {
@@ -130,11 +145,13 @@ public class Graphics {
             print("No models to render!")
         }
         
-        // Render all models
-        renderer.render(models: renderModels)
+        // Use the high-level pipeline system to render all models
+        if !renderModels.isEmpty {
+            render3DModels(renderModels)
+        }
         
-        // End frame and present
-        renderer.endFrame(imageIndex: imageIndex)
+        // End render pass and present frame
+        renderer.presentFrame(imageIndex: imageIndex)
     }
 
     ///Everytime model is added to scene this must be called (or the alternative version of this method)

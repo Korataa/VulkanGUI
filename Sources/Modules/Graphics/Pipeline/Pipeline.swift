@@ -98,6 +98,12 @@ final class VulkanPipelineImpl: Pipeline {
     private var pipelineLayout: VkPipelineLayout?
     private var logicalDevice: VkDevice
     private var vulkanRenderer: VulkanRenderer
+    private let descriptor: PipelineDescriptor
+
+    //Descriptor sets for this pipeline
+    private var frameDescriptorSet: VkDescriptorSet?
+    private var transformDescriptorSet: VkDescriptorSet?
+    private var materialDescriptorSet: VkDescriptorSet?
 
     init(descriptor: PipelineDescriptor, device: VkDevice?, renderer: VulkanRenderer) {
         guard let vkDevice = device else {
@@ -105,26 +111,156 @@ final class VulkanPipelineImpl: Pipeline {
         }
         self.logicalDevice = vkDevice
         self.vulkanRenderer = renderer
+        self.descriptor = descriptor
         createVulkanPipeline(from: descriptor)
+        createDescriptorSets()
     }
 
     private func createVulkanPipeline(from descriptor: PipelineDescriptor) {
-        // Use the VulkanRenderer to create the pipeline
-        let (pipeline, layout) = vulkanRenderer.createPipelineFromDescriptor(descriptor)
+        // Convert high-level descriptor to low-level Vulkan parameters
+        let shaderPaths = getShaderPaths(for: descriptor.type)
+        let vertexInputType = getVertexInputType(for: descriptor.type)
+        let descriptorSetLayouts = getDescriptorSetLayouts(for: descriptor.type)
         
-        self.pipelineHandle = pipeline
-        self.pipelineLayout = layout
+        // Use VulkanRenderer's low-level pipeline creation with raw Vulkan parameters
+        let (pipeline, layout) = vulkanRenderer.createGraphicsPipeline(
+            vertexShaderPath: shaderPaths.vertex,
+            fragmentShaderPath: shaderPaths.fragment,
+            vertexInputType: vertexInputType,
+            descriptorSetLayouts: descriptorSetLayouts,
+            cullMode: convertCullMode(descriptor.cullMode),
+            depthTest: descriptor.depthTest,
+            blendMode: convertBlendMode(descriptor.blendMode)
+        )
         
-        print("Created Vulkan pipeline for type: \(descriptor.type)")
+        guard let vkPipeline = pipeline, let vkLayout = layout else {
+            fatalError("Failed to create Vulkan pipeline for type: \(descriptor.type)")
+        }
+        
+        self.pipelineHandle = vkPipeline
+        self.pipelineLayout = vkLayout
+        
+        print("Successfully created Vulkan pipeline for type: \(descriptor.type)")
+    }
+    
+    // Helper methods to convert high-level descriptor to Vulkan specifics
+    private func getShaderPaths(for type: PipelineType) -> (vertex: String, fragment: String) {
+        switch type {
+        case .Graphics3D:
+            return ("vert.spv", "frag.spv")
+        case .Graphics2D, .UI:
+            return ("vert.spv", "frag.spv") // TODO: Add dedicated 2D/UI shaders
+        case .PostProcessing, .Compute:
+            fatalError("PostProcessing and Compute pipelines not implemented yet")
+        }
+    }
+    
+    private func getVertexInputType(for type: PipelineType) -> String {
+        switch type {
+        case .Graphics3D:
+            return "Vertex3D"
+        case .Graphics2D, .UI:
+            return "Vertex2D"
+        case .PostProcessing, .Compute:
+            fatalError("PostProcessing and Compute pipelines not implemented yet")
+        }
+    }
+    
+    private func getDescriptorSetLayouts(for type: PipelineType) -> [VkDescriptorSetLayout?] {
+        switch type {
+        case .Graphics3D:
+            return [vulkanRenderer.frameSetLayout, vulkanRenderer.transformSetLayout, vulkanRenderer.materialSetLayout3D]
+        case .Graphics2D, .UI:
+            return [vulkanRenderer.frameSetLayout, vulkanRenderer.materialSetLayout2D]
+        case .PostProcessing:
+            return [vulkanRenderer.postProcessingSetLayout]
+        case .Compute:
+            fatalError("Compute pipelines not implemented yet")
+        }
+    }
+    
+    private func convertCullMode(_ cullMode: CullMode) -> VkCullModeFlags {
+        switch cullMode {
+        case .None:
+            return VkCullModeFlags(VK_CULL_MODE_NONE.rawValue)
+        case .Front:
+            return VkCullModeFlags(VK_CULL_MODE_FRONT_BIT.rawValue)
+        case .Back:
+            return VkCullModeFlags(VK_CULL_MODE_BACK_BIT.rawValue)
+        case .FrontAndBack:
+            return VkCullModeFlags(VK_CULL_MODE_FRONT_AND_BACK.rawValue)
+        }
+    }
+    
+    private func convertBlendMode(_ blendMode: BlendMode) -> String {
+        switch blendMode {
+        case .None:
+            return "None"
+        case .Alpha:
+            return "Alpha"
+        case .Additive:
+            return "Additive"
+        case .Multiply:
+            return "Multiply"
+        }
+    }
+
+    private func createDescriptorSets() {
+        //Create descriptor sets based on pipeline type
+        switch descriptor.type {
+        case .Graphics3D:
+            frameDescriptorSet = vulkanRenderer.frameDescriptorSet
+            transformDescriptorSet = vulkanRenderer.transformDescriptorSet
+            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
+        case .Graphics2D, .UI:
+            frameDescriptorSet = vulkanRenderer.frameDescriptorSet
+            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
+        case .PostProcessing:
+            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
+        case .Compute:
+            break
+        }
     }
 
     func bind() {
-        // In a full implementation, you'd bind this pipeline to the command buffer
-        // For now, we'll just print that it's being bound
-        print("Binding Vulkan pipeline")
+        guard let pipeline = pipelineHandle, let layout = pipelineLayout else {
+            fatalError("pipeline not created properly")
+        }
+
+        // Use VulkanRenderer's helper methods instead of direct Vulkan calls
+        vulkanRenderer.bindPipeline(pipeline)
+        bindDescriptorSetsForPipeline(layout: layout)
+    }
+
+    private func bindDescriptorSetsForPipeline(layout: VkPipelineLayout) {
+        var descriptorSets: [VkDescriptorSet] = []
+
+        switch descriptor.type {
+        case .Graphics3D:
+            if let frameSet = frameDescriptorSet { descriptorSets.append(frameSet) }
+            if let transformSet = transformDescriptorSet { descriptorSets.append(transformSet) }
+            if let materialSet = materialDescriptorSet { descriptorSets.append(materialSet) }
+        case .Graphics2D, .UI:
+            if let frameSet = frameDescriptorSet { descriptorSets.append(frameSet) }
+            if let materialSet = materialDescriptorSet { descriptorSets.append(materialSet) }
+        case .PostProcessing:
+            if let materialSet = materialDescriptorSet { descriptorSets.append(materialSet) }
+        case .Compute:
+            break
+        }
+
+        // Use VulkanRenderer's helper method for binding descriptor sets
+        if !descriptorSets.isEmpty {
+            vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: descriptorSets)
+        }
+    }
+
+    func render(models: [Model]) {
+        // Bind this pipeline and its descriptor sets
+        bind()
         
-        // TODO: You'll need to get the current command buffer and bind the pipeline:
-        // vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineHandle!)
+        // Delegate actual rendering to VulkanRenderer's new simplified method
+        vulkanRenderer.render(models: models)
     }
 
     func unbind() {

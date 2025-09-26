@@ -321,8 +321,7 @@ same here 0       1
         createUniformBuffer()
         //createVertexBuffer()
         //createIndexBuffer()
-        //now finally create pipeline
-        createGraphicsPipeline()
+        //pipelines are now created on-demand via PipelineFactory
 
         //Framebuffers and commands
         createFrameBuffers()
@@ -1821,148 +1820,7 @@ same here 0       1
 
     }
 
-    // MARK: - High-Level Pipeline Creation
-    
-    /// Create a pipeline from high-level descriptor (used by pipeline abstraction)
-    func createPipelineFromDescriptor(_ descriptor: PipelineDescriptor) -> (VkPipeline?, VkPipelineLayout?) {
-        // Load shaders based on pipeline type
-        var vertShaderCode: DynamicArray<UInt8>?
-        var fragShaderCode: DynamicArray<UInt8>?
-        
-        guard let assetsPath = getAssetsPath() else {
-            fatalError("Can't get assets path!")
-        }
-        
-        // Choose shaders based on pipeline type
-        switch descriptor.type {
-        case .Graphics3D:
-            vertShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/vert.spv")
-            fragShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/frag.spv")
-        case .Graphics2D:
-            // TODO: Add 2D shaders when you have them
-            vertShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/vert.spv")
-            fragShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/frag.spv")
-        case .UI:
-            // TODO: Add UI shaders when you have them  
-            vertShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/vert.spv")
-            fragShaderCode = try? readFile(filename: "\(assetsPath)/Shaders/frag.spv")
-        case .PostProcessing, .Compute:
-            fatalError("PostProcessing and Compute pipelines not implemented yet")
-        }
-        
-        guard var vertCode = vertShaderCode, var fragCode = fragShaderCode else {
-            fatalError("Failed to load shader files")
-        }
-        
-        // Create shader modules
-        let vertShaderModule = createShaderModule(code: &vertCode)
-        let fragShaderModule = createShaderModule(code: &fragCode)
-        defer {
-            if let vertModule = vertShaderModule {
-                vkDestroyShaderModule(logicalDevice, vertModule, nil)
-            }
-            if let fragModule = fragShaderModule {
-                vkDestroyShaderModule(logicalDevice, fragModule, nil)
-            }
-        }
-        
-        //Create Shader stages
-        var vertShaderStageInfo = VkPipelineShaderStageCreateInfo()
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT
-        vertShaderStageInfo.module = vertShaderModule
-        vertShaderStageInfo.pName = UnsafePointer(shaderEntryPointName)
 
-        var fragShaderStageInfo = VkPipelineShaderStageCreateInfo()
-        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
-        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT
-        fragShaderStageInfo.module = fragShaderModule
-        fragShaderStageInfo.pName = UnsafePointer(shaderEntryPointName)
-
-        let shaderStages = DynamicArray<VkPipelineShaderStageCreateInfo>(vertShaderStageInfo, fragShaderStageInfo)
-
-        //CREATE VERTEX INPUT INFO
-        var vertexInputInfo = VkPipelineVertexInputStateCreateInfo()
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
-
-        switch descriptor.type {
-            case .Graphics3D:
-                var bindingDescription = Vertex3D.getBindingDescription()
-                var attributeDescriptions = Vertex3D.getAttributeDescriptions()
-        
-                vertexInputInfo.vertexBindingDescriptionCount = 1
-                vertexInputInfo.vertexAttributeDescriptionCount = UInt32(attributeDescriptions.getLength())
-                withUnsafePointer(to: &bindingDescription) { ptr in
-                    vertexInputInfo.pVertexBindingDescriptions = ptr
-                }
-                vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.getDataAsConstPointer()
-
-            case .Graphics2D, .UI:
-                var bindingDescription = Vertex2D.getBindingDescription()
-                var attributeDescriptions = Vertex2D.getAttributeDescriptions()
-
-                vertexInputInfo.vertexBindingDescriptionCount = 1
-                vertexInputInfo.vertexAttributeDescriptionCount = UInt32(attributeDescriptions.getLength())
-                withUnsafePointer(to: &bindingDescription) { ptr in
-                    vertexInputInfo.pVertexBindingDescriptions = ptr
-                }
-                vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.getDataAsConstPointer()
-            case .PostProcessing, .Compute:
-                fatalError("PostProcessing and Compute pipelines not implemented yet")
-                
-        }
-
-        //Create all the pipeline states
-        var inputAssemblyInfo = VkPipelineInputAssemblyStateCreateInfo()
-        inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO
-        inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-        inputAssemblyInfo.primitiveRestartEnable = VK_FALSE
-
-        var viewport = VkViewport()
-        viewport.x = 0.0
-        viewport.y = 0.0
-        viewport.width = Float(swapchainExtent!.width)
-        viewport.height = Float(swapchainExtent!.height)
-        viewport.minDepth = 0.0
-        viewport.maxDepth = 1.0
-
-        var scissor = VkRect2D()
-        scissor.offset = VkOffset2D(x: 0, y: 0)
-        scissor.extent = swapchainExtent!
-
-        var viewportStateInfo = VkPipelineViewportStateCreateInfo()
-        viewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO
-        viewportStateInfo.viewportCount = 1
-        withUnsafePointer(to: &viewport) { ptr in
-            viewportStateInfo.pViewports = ptr
-        }
-
-        viewportStateInfo.scissorCount = 1
-        withUnsafePointer(to: &scissor) { ptr in
-            viewportStateInfo.pScissors = ptr
-        }
-
-        var rasterizerInfo = VkPipelineRasterizationStateCreateInfo()
-        rasterizerInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO
-        rasterizerInfo.depthClampEnable = VK_FALSE
-        rasterizerInfo.rasterizerDiscardEnable = VK_FALSE
-        rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL
-        rasterizerInfo.lineWidth = 1.0
-        rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-        rasterizerInfo.depthBiasEnable = VK_FALSE
-
-        //Different cull modes for different pipelines
-        switch descriptor.type {
-            case .Graphics3D:
-                rasterizerInfo.cullMode = UInt32(VK_CULL_MODE_BACK_BIT.rawValue)
-            case .Graphics2D, .UI, .PostProcessing:
-                rasterizerInfo.cullMode = VK_CULL_MODE_NONE
-            case .Compute:
-                fatalError("Compute pipeline not supported yet")
-        }
-
-        var multisampling
-    }
 
     func createShaderModule(code: inout DynamicArray<UInt8>) -> VkShaderModule? {
         var createInfo: VkShaderModuleCreateInfo = VkShaderModuleCreateInfo()
@@ -2155,16 +2013,28 @@ same here 0       1
             bufferAllocation: &transformUBOMemory
         )
 
-        // Material constants (per mesh)
-        let materialUBOSize = VkDeviceSize(MemoryLayout<MaterialConstants>.stride * MAX_MATERIALS)
+        // Material constants for 3D rendering (per mesh)
+        let materialUBOSize3D = VkDeviceSize(MemoryLayout<MaterialConstants3D>.stride * MAX_MATERIALS)
         createBuffer(
-            size: materialUBOSize,
+            size: materialUBOSize3D,
             usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
             properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) |
                         UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
             isDynamic: true,
-            buffer: &materialUBO,
-            bufferAllocation: &materialUBOMemory
+            buffer: &materialUBO3D,
+            bufferAllocation: &materialUBOMemory3D
+        )
+
+        // Material constants for 2D rendering (per sprite)  
+        let materialUBOSize2D = VkDeviceSize(MemoryLayout<MaterialConstants2D>.stride * MAX_MATERIALS)
+        createBuffer(
+            size: materialUBOSize2D,
+            usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
+            properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) |
+                        UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
+            isDynamic: true,
+            buffer: &materialUBO2D,
+            bufferAllocation: &materialUBOMemory2D
         )
     }
 
@@ -2223,6 +2093,24 @@ same here 0       1
         print("Material UBO entry uses \(materialAlignment) bytes")
     }
 
+    func calculateAlignment2D() {
+        var properties = VkPhysicalDeviceProperties()
+        vkGetPhysicalDeviceProperties(physicalDevice, &properties)
+
+        let minAlignment = properties.limits.minUniformBufferOffsetAlignment
+
+        //Calculate alignment for 2D transform UBO
+        let transformRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<TransformConstants>.size)
+        transformAlignment2D = (transformRawSize + minAlignment - 1) & ~(minAlignment - 1)
+
+        //Calculate alignment for 2D material)
+        let materialRawSize: VkDeviceSize = VkDeviceSize(MemoryLayout<MaterialConstants2D>.size)
+        materialAlignment3D = (materialRawSize + minAlignment - 1) & ~(minAlignment - 1)
+
+        print("Transform UBO entry uses \(transformAlignment2D) bytes")
+        print("Material UBO entry uses \(materialAlignment3D) bytes")
+    }
+
     private var transformDebugCounter = 0
     
     func updateTransformUBO(at offset: Int, transform: Transform) {
@@ -2253,7 +2141,7 @@ same here 0       1
         vmaUnmapMemory(vmaAllocator!, transformUBOMemory!)
     }
 
-    func updateMaterialUBO(at offset: Int, material: Material) {
+    func updateMaterialUBO3D(at offset: Int, material: Material) {
         guard let materialUploader = materialUploader else {
             fatalError("Material uploader not initialized!")
         }
@@ -2261,9 +2149,8 @@ same here 0       1
         // Use VulkanMaterialUploader to convert Material to MaterialData
         materialUploader.update(from: material)
         
-        // Get the MaterialData from the uploader and convert to MaterialConstants format
-        // For now, we'll extract the key values and put them into MaterialConstants
-        var constants = MaterialConstants(
+        // Create 3D material constants
+        var constants = MaterialConstants3D(
             materialID: 0  // We don't need this anymore since we have real material data
         )
         constants.baseColor = Vector4(
@@ -2275,18 +2162,41 @@ same here 0       1
         constants.metallicFactor = material.metallicFactor
         constants.roughnessFactor = material.roughnessFactor
         
-        print("DEBUG: Uploading material at offset \(offset) with baseColor: \(constants.baseColor), metallic: \(constants.metallicFactor), roughness: \(constants.roughnessFactor)")
+        print("DEBUG: Uploading 3D material at offset \(offset) with baseColor: \(constants.baseColor), metallic: \(constants.metallicFactor), roughness: \(constants.roughnessFactor)")
 
         var dataPtr: UnsafeMutableRawPointer?
-        let result = vmaMapMemory(vmaAllocator!, materialUBOMemory!, &dataPtr)
+        let result = vmaMapMemory(vmaAllocator!, materialUBOMemory3D!, &dataPtr)
         if result != VK_SUCCESS {
-            fatalError("Failed to map material UBO memory!")
+            fatalError("Failed to map 3D material UBO memory!")
         }
 
         let destPtr = dataPtr!.advanced(by: offset)
-        memcpy(destPtr, &constants, MemoryLayout<MaterialConstants>.size)
+        memcpy(destPtr, &constants, MemoryLayout<MaterialConstants3D>.size)
 
-        vmaUnmapMemory(vmaAllocator!, materialUBOMemory!)
+        vmaUnmapMemory(vmaAllocator!, materialUBOMemory3D!)
+    }
+
+    func updateMaterialUBO2D(at offset: Int, tintColor: Vector4 = Vector4(1,1,1,1), uvScale: Vector2 = Vector2(1,1), uvOffset: Vector2 = Vector2(0,0), alpha: Float = 1.0) {
+        var constants = MaterialConstants2D(
+            tintColor: tintColor,
+            uvScale: uvScale,
+            uvOffset: uvOffset,
+            alpha: alpha,
+            effectParams: Vector3(0,0,0)  // No special effects by default
+        )
+        
+        print("DEBUG: Uploading 2D material at offset \(offset) with tintColor: \(constants.tintColor)")
+
+        var dataPtr: UnsafeMutableRawPointer?
+        let result = vmaMapMemory(vmaAllocator!, materialUBOMemory2D!, &dataPtr)
+        if result != VK_SUCCESS {
+            fatalError("Failed to map 2D material UBO memory!")
+        }
+
+        let destPtr = dataPtr!.advanced(by: offset)
+        memcpy(destPtr, &constants, MemoryLayout<MaterialConstants2D>.size)
+
+        vmaUnmapMemory(vmaAllocator!, materialUBOMemory2D!)
     }
 
     private func calculateViewFrustum(projectionMatrix: Matrix4x4, viewMatrix: Matrix4x4) -> Frustum {
@@ -2387,7 +2297,8 @@ same here 0       1
         }
     }
 
-    func render(models: [Model]) {
+    // Simplified render method for pipeline system - VulkanPipelineImpl handles binding
+    func renderSimple(models: [Model]) {
         // Check if resource manager and buffers are available
         guard let resourceManager = resourceManager else {
             return
@@ -2400,33 +2311,16 @@ same here 0       1
             return
         }
 
-        // Update camera matrices in the frame UBO
+        // Update camera matrices in the frame UBO (still needed for rendering)
         updateFrameUBO()
 
         //Calculate the view frustum for culling
         let frustum = calculateViewFrustum(projectionMatrix: camera.projectionMatrix, viewMatrix: camera.viewMatrix)
 
-        // Sort models by their first mesh's material ID for better batching
-        let sortedModels = models.sorted { 
-            ($0.meshes.first?.materialID ?? 0) < ($1.meshes.first?.materialID ?? 0) 
-        }
-
-        //for static meshes
-        var currentMaterialID: UInt32 = UInt32.max
+        // Process only visible static models (simplified - no material batching since VulkanPipelineImpl handles that)
         var currentTransformIndex: Int = 0
         
-        print("DEBUG: Processing \(sortedModels.count) sorted models")
-        for (i, model) in sortedModels.enumerated() {
-            let isDynamic = model.isDynamic
-            let isVisible = model.isVisible(in: frustum)
-            print("  Model \(i): isDynamic=\(isDynamic), isVisible=\(isVisible), meshes=\(model.meshes.count)")
-            
-            if !isDynamic && isVisible {
-                print("    -> Model \(i) WILL BE RENDERED")
-            } else {
-                print("    -> Model \(i) SKIPPED (isDynamic=\(isDynamic), isVisible=\(isVisible))")
-            }
-        }
+        print("DEBUG: Processing \(models.count) models")
         
         for model in sortedModels where !model.isDynamic && model.isVisible(in: frustum) {
             //bind static vertex buffer
@@ -2591,6 +2485,72 @@ same here 0       1
         }
     }
 
+    // New simplified render method for pipeline system - just draws models
+    func render(models: [Model]) {
+        // Check if resource manager and buffers are available
+        guard let resourceManager = resourceManager else {
+            return
+        }
+        
+        guard resourceManager.staticVertexBuffer != nil,
+              resourceManager.dynamicVertexBuffer != nil,
+              resourceManager.indexBuffer != nil else {
+            return
+        }
+
+        // Update camera matrices in the frame UBO (still needed for rendering)
+        updateFrameUBO()
+
+        // Calculate the view frustum for culling
+        let frustum = calculateViewFrustum(projectionMatrix: camera.projectionMatrix, viewMatrix: camera.viewMatrix)
+
+        // Simple rendering: just draw visible models
+        var currentTransformIndex: Int = 0
+        
+        for model in models where model.isVisible(in: frustum) {
+            // Choose appropriate vertex buffer based on model type
+            if model.isDynamic {
+                // Bind dynamic vertex buffer
+                resourceManager.withDynamicVertexBuffer { dynamicBuffer in
+                    let vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
+                    let offsets = DynamicArray<VkDeviceSize>(0)
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
+                }
+            } else {
+                // Bind static vertex buffer
+                resourceManager.withStaticVertexBuffer { staticBuffer in
+                    let vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
+                    let offsets = DynamicArray<VkDeviceSize>(0)
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
+                }
+            }
+
+            // Bind index buffer (same for all models)
+            resourceManager.withIndexBuffer { indexBuffer in
+                vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
+            }
+
+            // Update transform for this model
+            let transformOffset = currentTransformIndex * Int(transformAlignment)
+            updateTransformUBO(at: transformOffset, transform: model.transform)
+
+            // Draw all meshes in this model
+            for mesh in model.meshes {
+                print("DEBUG: Drawing mesh: indexCount=\(mesh.indexCount), indexOffset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
+                vkCmdDrawIndexed(
+                    commandBuffer!,
+                    mesh.indexCount,
+                    1,
+                    mesh.indexOffset,
+                    Int32(mesh.vertexOffset),
+                    0
+                )
+            }
+            
+            currentTransformIndex += 1
+        }
+    }
+
     //Synchronization shit
     func createSyncObjects() {
         imageAvailableSemaphores = DynamicArray<VkSemaphore?>(capacity: UInt32(MAX_FRAMES_IN_FLIGHT))
@@ -2627,16 +2587,12 @@ same here 0       1
 
     }
 
-    //DRAWING FUNCTIONS
+    //MARK: - Frame lifecycle (Low level Vulkan operations)
 
-    func beginFrame() {
-        //Vulkan-specific logic to start a frame
-    }
-
-    // Frame lifecycle management - called by Graphics class
-    func beginFrame() -> UInt32? {
+    //Phase 1: Acquire swapchain image and prepare for rendering
+    func acquireFrame() -> UInt32? {
         vkWaitForFences(logicalDevice, 1, &inFlightFences![currentFrame], VK_TRUE, UInt64.max)
-
+    
         var imageIndex: UInt32 = 0
         let result = vkAcquireNextImageKHR(logicalDevice, swapchain, UInt64.max,
             imageAvailableSemaphores![currentFrame], nil, &imageIndex)
@@ -2645,17 +2601,24 @@ same here 0       1
             recreateSwapchain()
             return nil
         } else if result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR {
-            fatalError("Failed to acquire swapchain image")
+            fatalError("Failed to acquire swapchain image!")
         }
 
         vkResetFences(logicalDevice, 1, &inFlightFences![currentFrame])
+
+        return imageIndex
+    }
+
+    //Phase 2: Begin command buffer recording and render pass
+    func beginRenderPass(imageIndex: UInt32) {
         vkResetCommandBuffer(commandBuffer, 0)
-        
-        // Begin command buffer and render pass
+
+        //Begin command buffer
         var beginInfo = VkCommandBufferBeginInfo()
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
         vkBeginCommandBuffer(commandBuffer, &beginInfo)
 
+        //Begin render pass
         var renderPassInfo = VkRenderPassBeginInfo()
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO
         renderPassInfo.renderPass = renderPass
@@ -2667,93 +2630,102 @@ same here 0       1
             VkClearValue(color: VkClearColorValue(float32: (0.1, 0.2, 0.3, 1.0))),
             VkClearValue(depthStencil: VkClearDepthStencilValue(depth: 1.0, stencil: 0))
         ]
+
         renderPassInfo.clearValueCount = 2
         clearValues.withUnsafeBufferPointer { ptr in
             renderPassInfo.pClearValues = ptr.baseAddress
         }
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE)
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline)
 
-        // Set viewport and scissor
+        //Set viewport and scissor (Shared by all pipelines)
+        setViewportAndScissor()
+
+        //DONT BIND ANY PIPELINE - thats the job of VulkanPipelineImpl
+    }
+
+    private func setViewportAndScissor() {
         var viewport = VkViewport()
         viewport.x = 0.0
-        viewport.y = 0.0  // Standard top-left origin
+        viewport.y = 0.0
         viewport.width = Float(swapchainExtent!.width)
-        viewport.height = Float(swapchainExtent!.height)  // Positive height
+        viewport.height = Float(swapchainExtent!.height)
         viewport.minDepth = 0.0
         viewport.maxDepth = 1.0
-        
+
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport)
 
         var scissor = VkRect2D()
         scissor.offset = VkOffset2D(x: 0, y: 0)
         scissor.extent = swapchainExtent!
-        
+
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor)
-
-        // Bind frame descriptor set (camera and lighting)
-        vkCmdBindDescriptorSets(
-            commandBuffer,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            pipelineLayout,
-            0, // Set 0: frame data
-            1, &frameDescriptorSet,
-            0, nil
-        )
-
-        return imageIndex
     }
 
-    func endFrame(imageIndex: UInt32) {
+    func endRenderPass() {
         vkCmdEndRenderPass(commandBuffer)
+    }
+
+    func presentFrame(imageIndex: UInt32) {
         vkEndCommandBuffer(commandBuffer)
 
-        // Submit command buffer
-        var submitInfo = VkSubmitInfo()
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
-
-        let waitSemaphores = DynamicArray<VkSemaphore?>(imageAvailableSemaphores![currentFrame])
-        let waitStages = DynamicArray<VkPipelineStageFlags>(UInt32(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT.rawValue))
-        submitInfo.waitSemaphoreCount = 1
-        submitInfo.pWaitSemaphores = waitSemaphores.getDataAsConstPointer()
-        submitInfo.pWaitDstStageMask = waitStages.getDataAsConstPointer()
-        
-        submitInfo.commandBufferCount = 1
-        withUnsafePointer(to: &commandBuffer) { ptr in
-            submitInfo.pCommandBuffers = ptr
-        }
-        let signalSemaphores = DynamicArray<VkSemaphore?>(renderFinishedSemaphores![currentFrame])
-        submitInfo.signalSemaphoreCount = 1
-        submitInfo.pSignalSemaphores = signalSemaphores.getDataAsConstPointer()
-
-        vkQueueSubmit(queueManager!.graphicsQueue, 1, &submitInfo, inFlightFences![currentFrame])
-
-        // Present
-        var presentInfo = VkPresentInfoKHR()
-        presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
-        presentInfo.waitSemaphoreCount = 1
-        presentInfo.pWaitSemaphores = signalSemaphores.getDataAsConstPointer()
-
-        let swapchains = DynamicArray<VkSwapchainKHR?>(swapchain)
-        presentInfo.swapchainCount = 1
-        presentInfo.pSwapchains = UnsafePointer(swapchains.getData())
-        withUnsafePointer(to: imageIndex) { ptr in
-            presentInfo.pImageIndices = ptr
-        }
-
-        let result = vkQueuePresentKHR(queueManager!.presentQueue, &presentInfo)
-        if result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR {
-            recreateSwapchain()
-        } else if result != VK_SUCCESS {
-            fatalError("failed to present swapchain image!")
-        }
-
-        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT
+        //Present logic
     }
 
-    func endFrame() {
-        //Vulkan-specific logic to end a frame
+    func bindPipeline(_ pipeline: VkPipeline) {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline)
+    }
+
+    func bindDescriptorSets(pipelineLayout: VkPipelineLayout, firstSet: UInt32, sets: [VkDescriptorSet], dynamicOffsets: [UInt32] = []) {
+        sets.withUnsafeBufferPointer { setsPtr in
+            dynamicOffsets.withUnsafeBufferPointer { offsetsPtr in
+                vkCmdBindDescriptorSets(
+                    commandBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    pipelineLayout,
+                    firstSet,
+                    UInt32(sets.count),
+                    UnsafePointer<VkDescriptorSet?>(OpaquePointer(setsPtr.baseAddress)),
+                    UInt32(dynamicOffsets.count),
+                    offsetsPtr.baseAddress
+                )
+            }
+        }
+    }
+
+    func bindVertexBuffer(_ buffer: VkBuffer, offset: VkDeviceSize = 0) {
+        let buffers: [VkBuffer?] = [buffer]
+        let offsets = [offset]
+        buffers.withUnsafeBufferPointer { buffersPtr in
+            offsets.withUnsafeBufferPointer { offsetsPtr in
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, buffersPtr.baseAddress, offsetsPtr.baseAddress)
+            }
+        }
+    }
+
+    func bindIndexBuffer(_ buffer: VkBuffer, offset: VkDeviceSize = 0) {
+        vkCmdBindIndexBuffer(commandBuffer, buffer, offset, VK_INDEX_TYPE_UINT32)
+    }
+
+    func drawIndexed(indexCount: UInt32, instanceCount: UInt32 = 1, firstIndex: UInt32 = 0, vertexOffset: Int32 = 0, firstInstance: UInt32 = 0)  {
+        vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance)
+    }
+
+    //MARK: Raw pipeline creation (called by VulkanPipelineImpl)
+    func createGraphicsPipeline(
+        vertexShaderPath: String,
+        fragmentShaderPath: String, 
+        vertexInputType: String,
+        descriptorSetLayouts: [VkDescriptorSetLayout?],
+        cullMode: VkCullModeFlags,
+        depthTest: Bool,
+        blendMode: String
+    ) -> (VkPipeline?, VkPipelineLayout?) {
+        // TODO: Implement low-level pipeline creation using these raw parameters
+        // This will contain the actual Vulkan pipeline creation logic
+        // without knowing about PipelineDescriptor
+        
+        fatalError("Low-level createGraphicsPipeline not implemented yet")
     }
 
     func waitIdle() {
