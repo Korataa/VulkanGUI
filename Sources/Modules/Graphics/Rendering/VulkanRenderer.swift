@@ -2413,72 +2413,7 @@ same here 0       1
         }
     }
 
-    // New simplified render method for pipeline system - just draws models
-    func render(models: [Model]) {
-        // Check if resource manager and buffers are available
-        guard let resourceManager = resourceManager else {
-            return
-        }
-        
-        guard resourceManager.staticVertexBuffer != nil,
-              resourceManager.dynamicVertexBuffer != nil,
-              resourceManager.indexBuffer != nil else {
-            return
-        }
 
-        // Update camera matrices in the frame UBO (still needed for rendering)
-        updateFrameUBO()
-
-        // Calculate the view frustum for culling
-        let frustum = calculateViewFrustum(projectionMatrix: camera.projectionMatrix, viewMatrix: camera.viewMatrix)
-
-        // Simple rendering: just draw visible models
-        var currentTransformIndex: Int = 0
-        
-        for model in models where model.isVisible(in: frustum) {
-            // Choose appropriate vertex buffer based on model type
-            if model.isDynamic {
-                // Bind dynamic vertex buffer
-                resourceManager.withDynamicVertexBuffer { dynamicBuffer in
-                    let vertexBuffers = DynamicArray<VkBuffer?>(dynamicBuffer.bufferHandle.asVulkanBuffer())
-                    let offsets = DynamicArray<VkDeviceSize>(0)
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
-                }
-            } else {
-                // Bind static vertex buffer
-                resourceManager.withStaticVertexBuffer { staticBuffer in
-                    let vertexBuffers = DynamicArray<VkBuffer?>(staticBuffer.bufferHandle.asVulkanBuffer())
-                    let offsets = DynamicArray<VkDeviceSize>(0)
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.getData(), offsets.getData())
-                }
-            }
-
-            // Bind index buffer (same for all models)
-            resourceManager.withIndexBuffer { indexBuffer in
-                vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
-            }
-
-            // Update transform for this model
-            let transformOffset = currentTransformIndex * Int(transformAlignment)
-            updateTransformUBO(at: transformOffset, transform: model.transform)
-
-            // Draw all meshes in this model
-            for mesh in model.meshes {
-                print("DEBUG: Drawing mesh: indexCount=\(mesh.indexCount), indexOffset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
-                vkCmdDrawIndexed(
-                    commandBuffer!,
-                    mesh.indexCount,
-                    1,
-                    mesh.indexOffset,
-                    Int32(mesh.vertexOffset),
-                    0
-                )
-            }
-            
-            currentTransformIndex += 1
-        }
-    }
-    */
     }
 
     //Synchronization shit

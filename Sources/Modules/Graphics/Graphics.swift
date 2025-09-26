@@ -151,6 +151,7 @@ public class Graphics {
         }
         
         // End render pass and present frame
+        renderer.endRenderPass()
         renderer.presentFrame(imageIndex: imageIndex)
     }
 
