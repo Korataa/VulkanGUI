@@ -137,6 +137,9 @@ public class Graphics {
     public func renderUIElements() {
         guard !uiElements.isEmpty else { return }
         
+        // Reset buffer offsets BEFORE uploading (critical!)
+        graphicsResourceManager?.reset2DBuffers()
+        
         // Check if any elements are dirty (need GPU upload)
         let dirtyElements = uiElements.filter { $0.isDirty }
         let newElements = uiElements.filter { !$0.isUploaded }
@@ -152,9 +155,6 @@ public class Graphics {
             print("❌ Failed to cast UI pipeline to VulkanPipelineImpl")
             return
         }
-        
-        // Reset and batch all UI elements
-        graphicsResourceManager?.reset2DBuffers()
         
         for element in uiElements {
             batchUIElement(element, pipeline: vulkanPipeline)
@@ -356,7 +356,16 @@ public class Graphics {
     }
 
     public func cleanup() {
+        print("🧹 Starting Graphics cleanup in proper order...")
+        
+        // 1. Clean up pipelines first (they reference resources)
         pipelineManager?.cleanupAllPipelines()
+        
+        // 2. Clean up resource managers BEFORE renderer (to free VMA buffers before VMA destruction)
+        print("🧹 Cleaning up VulkanResourceManager buffers...")
+        graphicsResourceManager?.cleanup()
+        
+        // 3. Finally clean up renderer (destroys VMA allocator)
         renderer.cleanup()
     }
 }

@@ -192,13 +192,23 @@ public final class VulkanResourceManager: ResourceManager {
     }
     
     public func cleanup() {
-        // Clean up buffers
+        print("🧹 VulkanResourceManager cleanup - freeing 2D buffers...")
+        
+        // Clean up buffers with explicit logging
+        if let buf = vertex2DBuffer {
+            print("  - Cleaning up 2D vertex buffer")
+            buf.cleanup()
+        }
+        if let buf = index2DBuffer {
+            print("  - Cleaning up 2D index buffer")
+            buf.cleanup()
+        }
+        
+        // Clean up other buffers  
         staticVertexBuffer?.cleanup()
         dynamicVertexBuffer?.cleanup()
         transferBuffer?.cleanup()
         indexBuffer?.cleanup()
-        vertex2DBuffer?.cleanup()
-        index2DBuffer?.cleanup()
         
         staticVertexBuffer = nil
         dynamicVertexBuffer = nil
@@ -210,6 +220,7 @@ public final class VulkanResourceManager: ResourceManager {
         // Clear tracking data
         activeResourceIds.removeAll()
         usedVRAM = 0
+        print("✅ VulkanResourceManager cleanup completed")
     }
     
     // MARK: - Memory Management

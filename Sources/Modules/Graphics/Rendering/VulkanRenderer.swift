@@ -239,11 +239,18 @@ same here 0       1
     func cleanup() {
         print("Waiting for GPU to finish before cleanup...")
         vkDeviceWaitIdle(logicalDevice)
+        
+        // CRITICAL: Reset ALL command buffers to clear pipeline references
+        if let cmdBuf = commandBuffer {
+            print("🔄 Resetting command buffer to clear pipeline references")
+            vkResetCommandBuffer(cmdBuf, 0)
+        }
+        
+        // Wait for device again after resetting command buffers
+        vkDeviceWaitIdle(logicalDevice)
         print("Destroying Vulkan resources...")
 
-        cleanupSwapchain()
-
-        //command pool and buffer shit
+        // THEN free command buffers
         withUnsafePointer(to: &commandBuffer) { ptr in
             vkFreeCommandBuffers(logicalDevice, commandPool, 1, ptr)
         }
@@ -252,6 +259,9 @@ same here 0       1
             vkDestroyCommandPool(logicalDevice, transferCommandPool, nil)
         }
         vkDestroyCommandPool(logicalDevice, commandPool, nil)
+
+        // Now safe to destroy pipelines and other resources
+        cleanupSwapchain()
 
         //Cleanup vma resources
         materialUploader?.cleanup()
@@ -280,13 +290,9 @@ same here 0       1
         //this also cleans up descriptorSet
         vkDestroyDescriptorPool(logicalDevice, descriptorPool, nil)
 
-        //Clean up all pipelines in the arrays
-        for pipeline in pipelines {
-            vkDestroyPipeline(logicalDevice, pipeline, nil)
-        }
-        for layout in pipelineLayouts {
-            vkDestroyPipelineLayout(logicalDevice, layout, nil)
-        }
+        // NOTE: Pipelines are already destroyed by pipelineManager?.cleanupAllPipelines()
+        // before this cleanup function is called. Don't destroy them again!
+        print("ℹ️  Pipelines already cleaned up by PipelineManager - skipping duplicate cleanup")
         pipelines.removeAll()
         pipelineLayouts.removeAll()
 
