@@ -10,11 +10,14 @@ destinationFolder = os.path.join(scriptDir, "..", ".build", "x86_64-unknown-linu
 sourceFolder = os.path.normpath(sourceFolder)
 destinationFolder = os.path.normpath(destinationFolder)
 
+#remove existing destination folder if it exists
+if os.path.exists(destinationFolder):
+    print(f"Removing existing folder: {destinationFolder}")
+    shutil.rmtree(destinationFolder)
+
 #copy the content folder and its contents
 try:
     shutil.copytree(sourceFolder, destinationFolder)
     print(f"successfully copied 'assets' to {destinationFolder}")
-except FileExistsError:
-    print(f"'{destinationFolder}' already exists")
 except Exception as e:
-    print(f"Error occured: {e}")
+    print(f"Error occurred: {e}")

@@ -23,6 +23,8 @@ public final class VulkanResourceManager: ResourceManager {
     public var dynamicVertexBuffer: VulkanBuffer?
     public var transferBuffer: VulkanBuffer?
     public var indexBuffer: VulkanBuffer?
+    public var vertex2DBuffer: VulkanBuffer?
+    public var index2DBuffer: VulkanBuffer?
     
     // Memory tracking
     private let totalVRAM: UInt64         // Total GPU memory available
@@ -33,12 +35,16 @@ public final class VulkanResourceManager: ResourceManager {
     private var staticVertexOffset: Int = 0
     private var dynamicVertexOffset: Int = 0
     private var indexOffset: Int = 0
+    private var vertex2DOffset: Int = 0
+    private var index2DOffset: Int = 0
     
     // Allocation percentages for different buffer types
     private let initialStaticVertexPercent: Double = 0.5  // Starts at 50% of initial VRAM
     private let initialDynamicVertexPercent: Double = 0.2 // Starts at 20% of initial VRAM
     private let initialIndexBufferPercent: Double = 0.2   // Starts at 20% of initial VRAM
     private let initialTransferPercent: Double = 0.1      // Starts at 10% of initial VRAM
+    private let initial2DVertexPercent: Double = 0.05     // Starts at 5% of initial VRAM for UI
+    private let initial2DIndexPercent: Double = 0.05      // Starts at 5% of initial VRAM for UI
     
     // Growth threshold - when to increase available VRAM (80% of current available)
     private let growthThreshold: Double = 0.8
@@ -133,6 +139,18 @@ public final class VulkanResourceManager: ResourceManager {
         return try body(indexBuffer!)
     }
     
+    /// Safely access 2D vertex buffer handle
+    public borrowing func withVertex2DBuffer<T>(_ body: (borrowing VulkanBuffer) throws -> T) rethrows -> T? {
+        guard vertex2DBuffer != nil else { return nil }
+        return try body(vertex2DBuffer!)
+    }
+    
+    /// Safely access 2D index buffer handle
+    public borrowing func withIndex2DBuffer<T>(_ body: (borrowing VulkanBuffer) throws -> T) rethrows -> T? {
+        guard index2DBuffer != nil else { return nil }
+        return try body(index2DBuffer!)
+    }
+    
     /// Get a resource by ID - simplified for ~Copyable compatibility
     public func getResource(_ id: Int) -> (any Resource)? {
         // Due to ~Copyable limitations with 'any Resource', use specific methods instead
@@ -179,11 +197,15 @@ public final class VulkanResourceManager: ResourceManager {
         dynamicVertexBuffer?.cleanup()
         transferBuffer?.cleanup()
         indexBuffer?.cleanup()
+        vertex2DBuffer?.cleanup()
+        index2DBuffer?.cleanup()
         
         staticVertexBuffer = nil
         dynamicVertexBuffer = nil
         transferBuffer = nil
         indexBuffer = nil
+        vertex2DBuffer = nil
+        index2DBuffer = nil
         
         // Clear tracking data
         activeResourceIds.removeAll()
@@ -224,6 +246,8 @@ public final class VulkanResourceManager: ResourceManager {
         try createDynamicVertexBuffer()
         try createIndexBuffer()
         try createTransferBuffer()
+        try createVertex2DBuffer()
+        try createIndex2DBuffer()
     }
     
     // MARK: - Buffer Creation
@@ -270,12 +294,36 @@ public final class VulkanResourceManager: ResourceManager {
         )
     }
     
+    private func createVertex2DBuffer() throws {
+        let size = UInt64(Double(availableVRAM) * initial2DVertexPercent)
+        vertex2DBuffer = VulkanBuffer(
+            vmaAllocator: vmaAllocator,
+            size: size,
+            usage: [.Vertex, .TransferDst],  // Add TransferDst for staging buffer uploads
+            properties: .GPULocal
+        )
+        vertex2DOffset = 0
+    }
+    
+    private func createIndex2DBuffer() throws {
+        let size = UInt64(Double(availableVRAM) * initial2DIndexPercent)
+        index2DBuffer = VulkanBuffer(
+            vmaAllocator: vmaAllocator,
+            size: size,
+            usage: [.Index, .TransferDst],  // Add TransferDst for staging buffer uploads
+            properties: .GPULocal
+        )
+        index2DOffset = 0
+    }
+    
     // MARK: - Buffer Type Enumeration
     public enum BufferType {
         case staticVertex
         case dynamicVertex
         case index
         case transfer
+        case vertex2D
+        case index2D
     }
     
     // MARK: - Generic Buffer Allocation
@@ -333,6 +381,34 @@ public final class VulkanResourceManager: ResourceManager {
                 size: size,
                 buffer: transferBuffer!
             )
+            
+        case .vertex2D:
+            guard vertex2DBuffer != nil else {
+                throw BufferError.bufferNotInitialized
+            }
+            try updateVRAMUsage(delta: Int64(size))
+            
+            let region = BufferRegion(
+                offset: vertex2DOffset,
+                size: size,
+                buffer: vertex2DBuffer!
+            )
+            vertex2DOffset += size
+            return region
+            
+        case .index2D:
+            guard index2DBuffer != nil else {
+                throw BufferError.bufferNotInitialized
+            }
+            try updateVRAMUsage(delta: Int64(size))
+            
+            let region = BufferRegion(
+                offset: index2DOffset,
+                size: size,
+                buffer: index2DBuffer!
+            )
+            index2DOffset += size
+            return region
         }
     }
     
@@ -343,6 +419,18 @@ public final class VulkanResourceManager: ResourceManager {
         }
         
         let size = vertices.count * MemoryLayout<T>.stride
+        
+        // Debug: Show first few vertices being allocated
+        print("DEBUG: VulkanResourceManager allocating \(vertices.count) vertices (\(size) bytes) at offset \(staticVertexOffset)")
+        if vertices.count > 0 {
+            let firstVertices = Array(vertices.prefix(3))
+            for (i, vertex) in firstVertices.enumerated() {
+                if let v3d = vertex as? Vertex3D {
+                    print("  Vertex \(i): pos(\(v3d.position.x), \(v3d.position.y), \(v3d.position.z))")
+                }
+            }
+        }
+        
         try updateVRAMUsage(delta: Int64(size))
         
         // Store current offset BEFORE any operations to avoid race conditions
@@ -359,8 +447,6 @@ public final class VulkanResourceManager: ResourceManager {
         
         // Update offset for next allocation
         staticVertexOffset += size
-        
-        print("DEBUG: VulkanResourceManager allocated \(vertices.count) vertices at offset \(currentOffset) bytes, next offset: \(staticVertexOffset)")
         
         return region
     }
@@ -392,6 +478,12 @@ public final class VulkanResourceManager: ResourceManager {
         }
         
         let size = indices.count * MemoryLayout<UInt32>.stride
+        
+        // Debug: Show first few indices being allocated
+        print("DEBUG: VulkanResourceManager allocating \(indices.count) indices (\(size) bytes) at offset \(indexOffset)")
+        let firstIndices = Array(indices.prefix(10))
+        print("  First indices: \(firstIndices)")
+        
         try updateVRAMUsage(delta: Int64(size))
         
         let region = BufferRegion(
@@ -404,6 +496,69 @@ public final class VulkanResourceManager: ResourceManager {
         try uploadToGPUBuffer(data: indices, destinationBuffer: indexBuffer!, destinationOffset: indexOffset)
         
         indexOffset += size
+        
+        return region
+    }
+    
+    // MARK: - 2D/UI Buffer Management (same pattern as 3D)
+    
+    public func allocate2DVertices(vertices: [Vertex2D]) throws -> BufferRegion {
+        guard vertex2DBuffer != nil else {
+            throw BufferError.bufferNotInitialized
+        }
+        
+        let size = vertices.count * MemoryLayout<Vertex2D>.stride
+        
+        // Debug: Show first few vertices being allocated
+        print("DEBUG: VulkanResourceManager allocating \(vertices.count) 2D vertices (\(size) bytes) at offset \(vertex2DOffset)")
+        if vertices.count > 0 {
+            let firstVertices = Array(vertices.prefix(3))
+            print("  First 2D vertices: \(firstVertices)")
+        }
+        
+        try updateVRAMUsage(delta: Int64(size))
+        
+        let currentOffset = vertex2DOffset
+        let region = BufferRegion(
+            offset: currentOffset,
+            size: size,
+            buffer: vertex2DBuffer!
+        )
+        
+        // Use high-performance staging buffer upload instead of direct upload
+        try uploadToGPUBuffer(data: vertices, destinationBuffer: vertex2DBuffer!, destinationOffset: currentOffset)
+        
+        // Update offset for next allocation
+        vertex2DOffset += size
+        
+        return region
+    }
+    
+    public func allocate2DIndices(indices: [UInt32]) throws -> BufferRegion {
+        guard index2DBuffer != nil else {
+            throw BufferError.bufferNotInitialized
+        }
+        
+        let size = indices.count * MemoryLayout<UInt32>.stride
+        
+        // Debug: Show first few indices being allocated
+        print("DEBUG: VulkanResourceManager allocating \(indices.count) 2D indices (\(size) bytes) at offset \(index2DOffset)")
+        let firstIndices = Array(indices.prefix(10))
+        print("  First 2D indices: \(firstIndices)")
+        
+        try updateVRAMUsage(delta: Int64(size))
+        
+        let region = BufferRegion(
+            offset: index2DOffset,
+            size: size,
+            buffer: index2DBuffer!
+        )
+        
+        // Use high-performance staging buffer upload instead of direct upload
+        try uploadToGPUBuffer(data: indices, destinationBuffer: index2DBuffer!, destinationOffset: index2DOffset)
+        
+        index2DOffset += size
+        
         return region
     }
     

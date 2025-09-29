@@ -46,7 +46,8 @@ public class Mesh {
         vkCmdBindIndexBuffer(commandBuffer, rawIndexBuffer, VkDeviceSize(indexOffset * MemoryLayout<UInt32>.stride), VK_INDEX_TYPE_UINT32)
     }
 
-    func draw(commandBuffer: VkCommandBuffer) {
+    public func draw(commandBuffer: VkCommandBuffer) {
+
         vkCmdDrawIndexed(commandBuffer, UInt32(indexCount), 1, UInt32(indexOffset), Int32(vertexOffset), 0)
     }
 }

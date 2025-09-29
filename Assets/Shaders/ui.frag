@@ -20,7 +20,8 @@ layout(set = 1, binding = 0) uniform UIMaterial {
 layout(set = 1, binding = 1) uniform sampler2D uiTexture;
 
 void main() {
-    vec4 color = vertexColor * uiMaterial.tint;
+    // For debugging: use vertex color directly, ignore material tint
+    vec4 color = vertexColor;
     
     switch(uiMaterial.textureMode) {
         case 0: // Solid color only

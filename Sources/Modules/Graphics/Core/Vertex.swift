@@ -53,7 +53,7 @@ public struct Vertex3D: VertexType {
     }
 }
 
-public struct Vertex2D {
+public struct Vertex2D: VertexType {
     public var position: SIMD2<Float>
     public var texCoord: SIMD2<Float>
     public var color: Color

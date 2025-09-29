@@ -1,11 +1,9 @@
 struct FrameConstants {
-    var viewMatrix: Matrix4x4
-    var projectionMatrix: Matrix4x4
-    var cameraPosition: Vector3
-    var time: Float
-    var lightPosition: Vector3
-    var lightColor: Vector3
-    var ambientColor: Vector3
+    var viewMatrix: Matrix4x4      // mat4 view
+    var projectionMatrix: Matrix4x4 // mat4 proj
+    var lightPosition: Vector3      // vec3 lightPos
+    var lightColor: Vector3         // vec3 lightColor  
+    var cameraPosition: Vector3     // vec3 viewPos (camera position)
 }
 
 let MAX_OBJECTS = 1024
@@ -34,4 +32,21 @@ struct MaterialConstants2D {
     var alpha: Float             // Global alpha multiplier
     var effectParams: Vector3    // Custom effect parameters (glow, etc.)
     // Add padding to align to 16 bytes if needed
+}
+
+// UI Projection UBO - matches UI shader layout
+struct UIProjectionConstants {
+    var projection: Matrix4x4   // Orthographic projection matrix (screen pixels to NDC)
+    var screenSize: Vector2     // Screen resolution for pixel-perfect positioning  
+    var padding: Vector2        // Alignment to 16 bytes
+}
+
+// UI Material UBO - matches UI fragment shader layout
+struct UIMaterialConstants {
+    var tint: Color            // Color tint/multiplier (vec4 in shader)
+    var opacity: Float         // Global opacity
+    var textureMode: Int32     // 0=solid, 1=texture, 2=texture+color blend
+    var roundedCorners: Int32  // Enable rounded corner rendering
+    var cornerRadius: Float    // Corner radius in pixels
+    var padding: Vector3       // Alignment padding
 }

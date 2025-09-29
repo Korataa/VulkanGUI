@@ -37,7 +37,11 @@ public class Graphics {
     }
 
     var renderModels: [Model] = []        //Models to render
+    private var uiElements: [UIElement] = []      //UI elements to render
     private var debugPrinted = false     // Only print debug info once
+    
+    /// Public accessor for UI elements count
+    public var uiElementCount: Int { uiElements.count }
 
     public init(sdlContext: SDLContext) {
         self.sdlContext = sdlContext
@@ -99,49 +103,101 @@ public class Graphics {
     
     /// Render multiple 3D models efficiently 
     public func render3DModels(_ models: [Model]) {
+        print("🎯 Graphics.render3DModels called with \(models.count) models")
         if !models.isEmpty {
             let pipeline = get3DPipeline()
+            print("🎯 Got pipeline: \(type(of: pipeline))")
             if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                print("🎯 Successfully cast to VulkanPipelineImpl, calling render()")
                 vulkanPipeline.render(models: models)
+            } else {
+                print("❌ Failed to cast pipeline to VulkanPipelineImpl!")
             }
+        } else {
+            print("❌ No models to render!")
         }
     }
     
-    /// Render a 2D sprite - high-level API for 2D rendering
-    public func render2DSprite(at position: (Float, Float), size: (Float, Float), textureID: UInt32? = nil) {
-        // TODO: Create a simple quad model for 2D sprites and render it with the 2D pipeline
-        let pipeline = get2DPipeline()
-        pipeline.bind()
-        // Implementation would create a quad mesh and render it
-        pipeline.unbind()
+    /// Add a UI element to be rendered every frame
+    public func addUIElement(_ element: UIElement) {
+        uiElements.append(element)
     }
     
-    /// Render UI element - high-level API for UI rendering  
-    public func renderUIElement(at position: (Float, Float), size: (Float, Float), textureID: UInt32? = nil) {
-        let pipeline = getUIPipeline()
-        pipeline.bind()
-        // Implementation would create UI quad and render it
-        pipeline.unbind()
+    /// Remove a UI element from rendering
+    public func removeUIElement(_ element: UIElement) {
+        uiElements.removeAll { $0 === element }
     }
-
-    //Rendering stuff gets updated in here!!
-    public func update() {
-        // Begin frame and get swapchain image index
-        guard let imageIndex = renderer.acquireFrame() else {
-            // Frame was skipped (swapchain recreation, etc.)
+    
+    /// Clear all UI elements
+    public func clearUIElements() {
+        uiElements.removeAll()
+    }
+    
+    /// Render all UI elements using the UI pipeline
+    public func renderUIElements() {
+        guard !uiElements.isEmpty else { return }
+        
+        // Get the UI graphics pipeline
+        let pipeline = getUIPipeline()
+        
+        // Cast to VulkanPipelineImpl to access render method
+        guard let vulkanPipeline = pipeline as? VulkanPipelineImpl else {
+            print("❌ Failed to cast UI pipeline to VulkanPipelineImpl")
             return
         }
         
-        // Begin render pass
-        renderer.beginRenderPass(imageIndex: imageIndex)
+        // For UI rendering, we'll render each element individually for now
+        // Batch UI elements for maximum performance - no more individual draw calls!
+        for element in uiElements {
+            // Add to batch instead of immediate rendering
+            batchUIElement(element, pipeline: vulkanPipeline)
+        }
         
-        // Debug: Print model count and details
-        if !renderModels.isEmpty {
-            print("Rendering \(renderModels.count) models:")
-            for (i, model) in renderModels.enumerated() {
-                print("  Model \(i): \(model.meshes.count) meshes, transform: \(model.transform)")
-            }
-        } else {
+        // Render all batched UI elements in a single draw call
+        vulkanPipeline.flushUIBatch()
+    }
+    
+    /// Add UI element to batch (much more efficient than individual rendering)
+    private func batchUIElement(_ element: UIElement, pipeline: VulkanPipelineImpl) {
+        // Get UI vertices and indices from element 
+        let vertices = element.vertices
+        let indices = element.indices
+        
+        // Add to batch instead of immediate rendering
+        pipeline.batchUIQuad(vertices: vertices, indices: indices, color: element.color, textureID: element.textureID)
+    }
+    
+    /// Create a simple 2D sprite/quad - convenience method
+    public func createSprite(at position: (Float, Float), size: (Float, Float), color: Color = Color.white, textureID: UInt32? = nil) -> UIElement {
+        return UIElement(position: SIMD2(position.0, position.1), 
+                        size: SIMD2(size.0, size.1), 
+                        color: color, 
+                        textureID: textureID)
+    }
+
+    //MARK: - Frame Management (Input Latency Optimized)
+    
+    private var currentImageIndex: UInt32?
+    
+    /// Phase 1: Create frame and begin render pass - call before polling input
+    public func createFrame() -> Bool {
+        guard let imageIndex = renderer.createFrame() else {
+            currentImageIndex = nil
+            return false // Frame was skipped (swapchain recreation, etc.)
+        }
+        currentImageIndex = imageIndex
+        return true
+    }
+    
+    /// Phase 2: Render all objects and present the frame - call after polling input
+    public func presentFrame() {
+        guard let imageIndex = currentImageIndex else {
+            print("ERROR: presentFrame() called without successful createFrame()")
+            return
+        }
+        
+        // Debug: Print model count (quietly)
+        if renderModels.isEmpty {
             print("No models to render!")
         }
         
@@ -150,9 +206,19 @@ public class Graphics {
             render3DModels(renderModels)
         }
         
+        // Render UI elements on top of 3D models
+        renderUIElements()
+        
         // End render pass and present frame
-        renderer.endRenderPass()
-        renderer.presentFrame(imageIndex: imageIndex)
+        renderer.renderFrame(imageIndex: imageIndex)
+        currentImageIndex = nil
+    }
+    
+    /// Legacy method - use createFrame() + presentFrame() instead for better input latency
+    public func update() {
+        if createFrame() {
+            presentFrame()
+        }
     }
 
     ///Everytime model is added to scene this must be called (or the alternative version of this method)
@@ -185,15 +251,15 @@ public class Graphics {
     
     /// Create or get a 3D graphics pipeline for rendering models
     private func get3DPipeline() -> Pipeline {
-        let descriptor = PipelineDescriptor(
+        let graphics3DDescriptor = PipelineDescriptor(
             type: .Graphics3D,
-            vertexShader: loadShaderIfNeeded("shader.vert"), // You'll implement this
-            fragmentShader: loadShaderIfNeeded("shader.frag"), // You'll implement this
+            vertexShader: "vert.spv",
+            fragmentShader: "frag.spv",
             blendMode: .None,
             depthTest: true,
             cullMode: .Back
         )
-        return pipelineManager.createOrGetPipeline(desc: descriptor, device: renderer.logicalDevice)
+        return pipelineManager.createOrGetPipeline(desc: graphics3DDescriptor, device: renderer.logicalDevice)
     }
     
     /// Create or get a 2D graphics pipeline for sprites
@@ -245,16 +311,9 @@ public class Graphics {
         let pipelineUI = getUIPipeline()
         print("✅ UI pipeline created successfully: \(type(of: pipelineUI))")
         
-        // Test basic pipeline binding
-        print("Testing pipeline binding...")
-        pipeline3D.bind()
-        print("✅ 3D pipeline bound successfully")
-        
-        pipelineUI.bind()  
-        print("✅ UI pipeline bound successfully")
-        
-        pipeline3D.unbind()
-        pipelineUI.unbind()
+        // Test basic pipeline binding (disabled - needs command buffer context)
+        print("Pipeline binding test skipped (requires command buffer recording)")
+        // TODO: Test pipeline binding within actual render pass context
         
         print("=== Pipeline Test Complete ===")
     }

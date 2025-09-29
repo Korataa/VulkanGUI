@@ -605,3 +605,16 @@ public func perspectiveLH_ZZeroOne(fovY: Float, aspect: Float, nearZ: Float, far
         SIMD4<Float>(0, 0, -nearZ * farZ * nf, 0)
     )
 }
+
+public func orthographicMatrix(left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) -> Matrix4x4 {
+    let rl = right - left
+    let tb = top - bottom
+    let fn = far - near
+    
+    return Matrix4x4(
+        SIMD4<Float>(2.0 / rl, 0, 0, 0),
+        SIMD4<Float>(0, 2.0 / tb, 0, 0),
+        SIMD4<Float>(0, 0, -1.0 / fn, 0),
+        SIMD4<Float>(-(right + left) / rl, -(top + bottom) / tb, -near / fn, 1)
+    )
+}

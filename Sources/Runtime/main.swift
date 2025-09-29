@@ -43,15 +43,36 @@ let assetLoader = AssetLoader(resourceManager: resourceSystem.graphicsResourceMa
 if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf") {
     let model = assetLoader.createModel(from: loadedModel)
     
-    // Set model to simple identity transform for debugging
-    model.transform.position = Vector3(0.0, 0.0, 0.0)  // At origin
-    model.transform.rotation = Quaternion.fromAxisAngle(axis: Vector3(0.0, 1.0, 0.0), angle: Float.pi / 2)  // 90° Y rotation
-    model.transform.scale = Vector3(1.0, 1.0, 1.0)      // No scaling
+    // Set model to reasonable transform for viewing
+    model.transform.position = Vector3(0.0, 0.0, 0.0)   // Center it at origin
+    model.transform.rotation = Quaternion.identity()     // No rotation - face camera directly  
+    model.transform.scale = Vector3(1.0, 1.0, 1.0)      // Normal size
     
     print("Model created with \(model.meshes.count) meshes, bounding sphere: \(model.boundingSphere)")
     print("Model transform: \(model.transform)")
     graphics.addModel(model: model)
     print("Model loaded successfully!")
+    
+    // Test UI elements - create some UI overlays using screen pixel coordinates
+    print("Creating test UI elements...")
+    
+    // Create multiple UI elements positioned to not cover the center (where 3D model is)
+    // Screen is 800x600, so avoid center area around (400, 300)
+    // Using larger spacing to ensure no overlap
+    
+    // Red square in top-left corner
+    let redSquare = graphics.createSprite(at: (80, 80), size: (60, 60), color: Color.red)
+    graphics.addUIElement(redSquare)
+    
+    // Green square in top-right corner  
+    let greenSquare = graphics.createSprite(at: (720, 80), size: (60, 60), color: Color.green)
+    graphics.addUIElement(greenSquare)
+    
+    // White square in bottom-left corner (moved further down)
+    let whiteSquare = graphics.createSprite(at: (80, 520), size: (60, 60), color: Color.white)
+    graphics.addUIElement(whiteSquare)
+    
+    print("✅ UI elements created: \(graphics.uiElementCount) elements")
     
     // Now that textures are loaded, create Vulkan textures
     graphics.createTexturesFromResourceManager()
@@ -85,18 +106,16 @@ func updateCamera() {
         fovY: 45.0,
         fovX: 0.0,  // Will be calculated from aspect ratio
         aspect: aspectRatio,  // Use actual window aspect ratio
-        nearZ: 1.0,
-        farZ: 200.0  // Reduced from 1000.0 for better depth precision
+        nearZ: 1.0,   // Use default near plane to avoid clipping issues
+        farZ: 1000.0  // Large far plane to see distant objects
     )
     graphics.setCamera(camera)
-
-    print("Camera position: \(Vector3(x, y, z))")
-    print("Camera target: \(cameraTarget)")
-    print("Camera distance: \(cameraDistance)")
-    print("Camera aspect ratio: \(aspectRatio)")
 }
 
-// Initialize camera
+// Initialize camera with better view
+cameraDistance = 15.0  // Much further back
+cameraAngleY = 0.0     // Look straight at model
+cameraAngleX = 0.2     // Slight downward angle
 updateCamera()
 print("Camera orbit controls: WASD to rotate, QE to zoom, R to reset")
 print("Current angle Y: \(cameraAngleY), angle X: \(cameraAngleX), distance: \(cameraDistance)")
@@ -149,7 +168,27 @@ while !quit {
     
     if cameraChanged {
         updateCamera()
+        
+        // Debug: Show camera position when it changes
+        let x = cos(cameraAngleX) * sin(cameraAngleY) * cameraDistance
+        let y = sin(cameraAngleX) * cameraDistance + cameraTarget.y
+        let z = cos(cameraAngleX) * cos(cameraAngleY) * cameraDistance
+        print("Camera moved to: (\(x), \(y), \(z)), looking at: \(cameraTarget), distance: \(cameraDistance)")
     }
     
-    graphics.update()
+    // Use the new input-latency optimized frame management
+    if graphics.createFrame() {
+        // Frame is ready for rendering
+        
+        // TODO: Add proper input polling here for minimal input lag
+        // For now, input is already processed above
+        
+        // Present the frame
+        graphics.presentFrame()
+    }
 }
+
+// Cleanup after main loop
+print("🧹 Starting cleanup...")
+graphics.cleanup()
+print("✅ Cleanup completed")

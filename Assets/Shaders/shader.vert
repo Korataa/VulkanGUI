@@ -16,7 +16,7 @@ layout(set = 0, binding = 0) uniform FrameData {
 // Set 1: Transform data (per model)
 layout(set = 1, binding = 0) uniform TransformData {
     mat4 model;
-    mat4 normal;
+    mat3 normal;  // Normal matrix is 3x3, not 4x4
 } transformData;
 
 layout(location = 0) out vec3 fragPos;
