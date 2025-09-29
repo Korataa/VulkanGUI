@@ -133,28 +133,65 @@ public class Graphics {
         uiElements.removeAll()
     }
     
-    /// Render all UI elements using the UI pipeline
+    /// Render all UI elements using the UI pipeline with simple caching
     public func renderUIElements() {
         guard !uiElements.isEmpty else { return }
         
-        // Get the UI graphics pipeline
-        let pipeline = getUIPipeline()
+        // Check if any elements are dirty (need GPU upload)
+        let dirtyElements = uiElements.filter { $0.isDirty }
+        let newElements = uiElements.filter { !$0.isUploaded }
         
-        // Cast to VulkanPipelineImpl to access render method
+        if !dirtyElements.isEmpty || !newElements.isEmpty {
+            // Upload changed elements
+            uploadUIElements(dirtyElements + newElements)
+        }
+        
+        // Render all elements using batching system (simplified for now)
+        let pipeline = getUIPipeline()
         guard let vulkanPipeline = pipeline as? VulkanPipelineImpl else {
             print("❌ Failed to cast UI pipeline to VulkanPipelineImpl")
             return
         }
         
-        // For UI rendering, we'll render each element individually for now
-        // Batch UI elements for maximum performance - no more individual draw calls!
+        // Reset and batch all UI elements
+        graphicsResourceManager?.reset2DBuffers()
+        
         for element in uiElements {
-            // Add to batch instead of immediate rendering
             batchUIElement(element, pipeline: vulkanPipeline)
         }
         
-        // Render all batched UI elements in a single draw call
         vulkanPipeline.flushUIBatch()
+    }
+    
+    /// Upload UI elements to GPU using dynamic buffers (like dynamic 3D models)
+    /// 
+    /// TODO: Performance optimization - Currently treats all UI as dynamic for simplicity.
+    /// Could be optimized by categorizing UI elements:
+    /// - Static UI (buttons, panels) -> allocate once like 3D models  
+    /// - Dynamic UI (health bars, animations) -> use current approach
+    /// - Semi-dynamic UI (text) -> hybrid approach with change detection
+    /// Only optimize if UI becomes a bottleneck (very unlikely in 3D games)
+    private func uploadUIElements(_ elements: [UIElement]) {
+        guard !elements.isEmpty else { return }
+        
+        print("📤 Uploading \(elements.count) dynamic UI elements")
+        
+        do {
+            for element in elements {
+                // Use dynamic allocation for UI (same as dynamic 3D models)
+                if let vertexRegion = try graphicsResourceManager?.allocateDynamicVertices(vertices: element.vertices) {
+                    if let indexRegion = try graphicsResourceManager?.allocate2DIndices(indices: element.indices) {
+                        // Store offsets like Mesh does (not BufferRegion)
+                        element.markUploaded(
+                            vertexOffset: vertexRegion.offset / MemoryLayout<Vertex2D>.stride,
+                            indexOffset: indexRegion.offset / MemoryLayout<UInt32>.stride
+                        )
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error uploading dynamic UI elements: \(error)")
+        }
     }
     
     /// Add UI element to batch (much more efficient than individual rendering)

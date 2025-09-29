@@ -100,7 +100,7 @@ public final class VulkanResourceManager: ResourceManager {
         let id = nextResourceId
         nextResourceId += 1
 
-        var mutableShader = shader
+        let mutableShader = shader
         mutableShader.id = id
 
         shaders.append(mutableShader)
@@ -534,6 +534,12 @@ public final class VulkanResourceManager: ResourceManager {
         return region
     }
     
+    /// Reset 2D buffer offsets to reuse same buffer space each frame (no allocation)
+    public func reset2DBuffers() {
+        vertex2DOffset = 0
+        index2DOffset = 0
+    }
+    
     public func allocate2DIndices(indices: [UInt32]) throws -> BufferRegion {
         guard index2DBuffer != nil else {
             throw BufferError.bufferNotInitialized
@@ -630,4 +636,5 @@ public enum BufferError: Error {
     case bufferNotInitialized
     case outOfVRAM
     case uploadFailed
+    case insufficientMemory
 }

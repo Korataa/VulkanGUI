@@ -1898,7 +1898,7 @@ same here 0       1
                 }
                 
                 writes.append(textureWrite)
-                print("Material descriptor set: Using texture with imageView: \(vulkanTexture.imageView)")
+                print("Material descriptor set: Using texture with imageView: \(String(describing: vulkanTexture.imageView))")
             } else {
                 print("Material descriptor set: No textures available yet - will update later when textures are loaded")
             }
@@ -1939,13 +1939,13 @@ same here 0       1
     }
 
     private func updateUIMaterialDescriptorSet() {
-        guard let uiMaterialDescriptorSet = uiMaterialDescriptorSet else {
+        guard uiMaterialDescriptorSet != nil else {
             print("Warning: UI material descriptor set not allocated - skipping update")
             return
         }
 
         // Create UI material data with proper defaults
-        var uiMaterial = UIMaterialConstants(
+        let _ = UIMaterialConstants(
             tint: Color.white,        // White tint = no color modification
             opacity: 1.0,            // Fully opaque
             textureMode: 0,          // Solid color mode (no texture)
@@ -2455,7 +2455,7 @@ same here 0       1
     }
 
     private func updateUIProjection() {
-        guard let uiProjectionUBO = uiProjectionUBO, let uiProjectionUBOMemory = uiProjectionUBOMemory else {
+        guard let _ = uiProjectionUBO, let uiProjectionUBOMemory = uiProjectionUBOMemory else {
             print("Warning: UI projection UBO not available")
             return
         }
@@ -2623,6 +2623,8 @@ same here 0       1
         guard let imageIndex = acquireFrame() else {
             return nil
         }
+        
+        // Note: No longer resetting 2D buffers - using smart caching like 3D models!
         
         // Update camera matrices before rendering
         updateFrameUBO()
@@ -2827,26 +2829,23 @@ same here 0       1
         
         print("🚀 Flushing UI batch: \(uiBatchCount) elements, \(batchedUIVertices.count) vertices, \(batchedUIIndices.count) indices")
         
-        // Use VulkanResourceManager to allocate and upload 2D data (same as 3D pattern)
+        // Use VulkanResourceManager to allocate and render 2D data
         do {
-            // Allocate and upload vertices using staging buffer, extract offsets immediately
-            let vertexOffset: VkDeviceSize
-            let indexOffset: VkDeviceSize
-            
-            if let resourceManager = resourceManager {
-                let vertexRegion = try resourceManager.allocate2DVertices(vertices: batchedUIVertices)
-                vertexOffset = VkDeviceSize(vertexRegion.offset)
-                
-                let indexRegion = try resourceManager.allocate2DIndices(indices: batchedUIIndices)
-                indexOffset = VkDeviceSize(indexRegion.offset)
-            } else {
+            // Allocate vertices and indices using existing methods
+            guard let resourceManager = resourceManager else {
                 print("❌ No resource manager available")
                 return
             }
             
-            // Bind 2D buffers and draw (same pattern as 3D)
-            resourceManager?.withVertex2DBuffer { vertexBuffer in
-                resourceManager?.withIndex2DBuffer { indexBuffer in
+            let vertexRegion = try resourceManager.allocate2DVertices(vertices: batchedUIVertices)
+            let indexRegion = try resourceManager.allocate2DIndices(indices: batchedUIIndices)
+            
+            let vertexOffset = VkDeviceSize(vertexRegion.offset)
+            let indexOffset = VkDeviceSize(indexRegion.offset)
+            
+            // Bind 2D buffers and draw
+            resourceManager.withVertex2DBuffer { vertexBuffer in
+                resourceManager.withIndex2DBuffer { indexBuffer in
                     // Bind buffers with proper offsets
                     vkCmdBindVertexBuffers(commandBuffer, 0, 1, withUnsafePointer(to: vertexBuffer.bufferHandle.asVulkanBuffer()) { $0 }, withUnsafePointer(to: vertexOffset) { $0 })
                     vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), indexOffset, VK_INDEX_TYPE_UINT32)
@@ -2854,7 +2853,7 @@ same here 0       1
                     // Single draw call for all UI elements
                     vkCmdDrawIndexed(commandBuffer, UInt32(batchedUIIndices.count), 1, 0, 0, 0)
                     
-                    print("✅ UI batch rendered in single draw call using proper staging upload!")
+                    print("✅ UI batch rendered in single draw call!")
                 }
             }
         } catch {
@@ -2873,60 +2872,12 @@ same here 0       1
     }
 
     func drawUIQuad(vertices: [Vertex2D], indices: [UInt32], color: Color, textureID: UInt32?) {
-        // Better color detection
-        let colorName: String
-        if color.r > 200 && color.g < 50 && color.b < 50 {
-            colorName = "RED"
-        } else if color.g > 200 && color.r < 50 && color.b < 50 {
-            colorName = "GREEN"
-        } else if color.r > 200 && color.g > 200 && color.b > 200 {
-            colorName = "WHITE"
-        } else {
-            colorName = "UNKNOWN(\(color.r),\(color.g),\(color.b))"
-        }
+        // DEPRECATED: Use flushUIBatch() instead for better performance
+        // This method is kept for compatibility but should not be used
+        print("⚠️ WARNING: drawUIQuad is deprecated - use batching system instead!")
         
-        print("🎨 Drawing \(colorName) quad using VulkanResourceManager 2D buffers")
-        
-        // NEW: Use VulkanResourceManager dedicated 2D buffers for UI rendering
-        // This uses proper resource management without per-frame buffer creation
-        
-        let vertexDataSize = vertices.count * MemoryLayout<Vertex2D>.stride
-        let indexDataSize = indices.count * MemoryLayout<UInt32>.stride
-        
-        // Use VulkanResourceManager 2D vertex buffer - proper resource management!
-        resourceManager?.withVertex2DBuffer { vertex2DBuffer in
-            vertices.withUnsafeBufferPointer { vertexPtr in
-                // Map 2D vertex buffer and upload UI data
-                var vertexData: UnsafeMutableRawPointer?
-                if vmaMapMemory(vmaAllocator!, vertex2DBuffer.allocation, &vertexData) == VK_SUCCESS {
-                    vertexData?.copyMemory(from: vertexPtr.baseAddress!, byteCount: vertexDataSize)
-                    vmaUnmapMemory(vmaAllocator!, vertex2DBuffer.allocation)
-                }
-                
-                print("📍 Binding 2D vertex buffer: handle=\(vertex2DBuffer.bufferHandle.asVulkanBuffer()), size=\(vertex2DBuffer.size)")
-                vkCmdBindVertexBuffers(commandBuffer, 0, 1, withUnsafePointer(to: vertex2DBuffer.bufferHandle.asVulkanBuffer()) { $0 }, withUnsafePointer(to: VkDeviceSize(0)) { $0 })
-            }
-        }
-        
-        // Use VulkanResourceManager 2D index buffer - proper resource management!
-        resourceManager?.withIndex2DBuffer { index2DBuffer in
-            indices.withUnsafeBufferPointer { indexPtr in
-                // Map 2D index buffer and upload UI data  
-                var indexData: UnsafeMutableRawPointer?
-                if vmaMapMemory(vmaAllocator!, index2DBuffer.allocation, &indexData) == VK_SUCCESS {
-                    indexData?.copyMemory(from: indexPtr.baseAddress!, byteCount: indexDataSize)
-                    vmaUnmapMemory(vmaAllocator!, index2DBuffer.allocation)
-                }
-                
-                print("📍 Binding 2D index buffer: handle=\(index2DBuffer.bufferHandle.asVulkanBuffer()), size=\(index2DBuffer.size)")
-                vkCmdBindIndexBuffer(commandBuffer, index2DBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
-            }
-        }
-        
-        // Draw the UI quad
-        vkCmdDrawIndexed(commandBuffer, UInt32(indices.count), 1, 0, 0, 0)
-        
-        print("✅ UI quad drawn using VulkanResourceManager 2D buffers")
+        // Fallback to batching system for consistency
+        batchUIQuad(vertices: vertices, indices: indices, color: color, textureID: textureID)
     }
 
     //MARK: Raw pipeline creation (called by VulkanPipelineImpl)
