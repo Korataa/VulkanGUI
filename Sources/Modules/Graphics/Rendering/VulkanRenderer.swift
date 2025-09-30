@@ -267,10 +267,33 @@ same here 0       1
         materialUploader?.cleanup()
         mainShader?.cleanup()
         textureManager?.cleanup()
+        
+        // TODO: Move all these VMA buffer allocations into VulkanResourceManager
+        // This would centralize buffer management and eliminate the need for manual cleanup here
+        // Affected buffers: frameUBO, objectUBO, vertexBuffer, indexBuffer, 2D buffers, UBOs
         vmaDestroyBuffer(vmaAllocator!, frameUBO, frameUBOMemory)
         vmaDestroyBuffer(vmaAllocator!, objectUBO, objectUBOMemory)
         vmaDestroyBuffer(vmaAllocator!, vertexBuffer, vertexBufferAllocation)
         vmaDestroyBuffer(vmaAllocator!, indexBuffer, indexBufferAllocation)
+        
+        // Cleanup 2D buffers
+        if let buffer2D_Vertex = buffer2D_Vertex, let buffer2D_VertexAllocation = buffer2D_VertexAllocation {
+            vmaDestroyBuffer(vmaAllocator!, buffer2D_Vertex, buffer2D_VertexAllocation)
+        }
+        if let buffer2D_Index = buffer2D_Index, let buffer2D_IndexAllocation = buffer2D_IndexAllocation {
+            vmaDestroyBuffer(vmaAllocator!, buffer2D_Index, buffer2D_IndexAllocation)
+        }
+        
+        // Cleanup transform and material UBOs
+        if let transformUBO = transformUBO, let transformUBOMemory = transformUBOMemory {
+            vmaDestroyBuffer(vmaAllocator!, transformUBO, transformUBOMemory)
+        }
+        if let materialUBO3D = materialUBO3D, let materialUBOMemory3D = materialUBOMemory3D {
+            vmaDestroyBuffer(vmaAllocator!, materialUBO3D, materialUBOMemory3D)
+        }
+        if let materialUBO2D = materialUBO2D, let materialUBOMemory2D = materialUBOMemory2D {
+            vmaDestroyBuffer(vmaAllocator!, materialUBO2D, materialUBOMemory2D)
+        }
         
         // Cleanup UI projection buffer
         if let uiProjectionUBO = uiProjectionUBO, let uiProjectionUBOMemory = uiProjectionUBOMemory {
@@ -286,6 +309,44 @@ same here 0       1
         }
         
         vmaDestroyAllocator(vmaAllocator)
+
+        // Destroy all descriptor set layouts (including 2D and UI)
+        if let frameSetLayout = frameSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, frameSetLayout, nil)
+            self.frameSetLayout = nil
+        }
+        if let transformSetLayout = transformSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, transformSetLayout, nil)
+            self.transformSetLayout = nil
+        }
+        if let materialSetLayout3D = materialSetLayout3D {
+            vkDestroyDescriptorSetLayout(logicalDevice, materialSetLayout3D, nil)
+            self.materialSetLayout3D = nil
+        }
+        if let materialSetLayout2D = materialSetLayout2D {
+            vkDestroyDescriptorSetLayout(logicalDevice, materialSetLayout2D, nil)
+            self.materialSetLayout2D = nil
+        }
+        if let postProcessingSetLayout = postProcessingSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, postProcessingSetLayout, nil)
+            self.postProcessingSetLayout = nil
+        }
+        if let transform2DSetLayout = transform2DSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, transform2DSetLayout, nil)
+            self.transform2DSetLayout = nil
+        }
+        if let material2DSetLayout = material2DSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, material2DSetLayout, nil)
+            self.material2DSetLayout = nil
+        }
+        if let uiProjectionSetLayout = uiProjectionSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, uiProjectionSetLayout, nil)
+            self.uiProjectionSetLayout = nil
+        }
+        if let uiMaterialSetLayout = uiMaterialSetLayout {
+            vkDestroyDescriptorSetLayout(logicalDevice, uiMaterialSetLayout, nil)
+            self.uiMaterialSetLayout = nil
+        }
 
         //this also cleans up descriptorSet
         vkDestroyDescriptorPool(logicalDevice, descriptorPool, nil)

@@ -194,17 +194,9 @@ public final class VulkanResourceManager: ResourceManager {
     public func cleanup() {
         print("🧹 VulkanResourceManager cleanup - freeing 2D buffers...")
         
-        // Clean up buffers with explicit logging
-        if let buf = vertex2DBuffer {
-            print("  - Cleaning up 2D vertex buffer")
-            buf.cleanup()
-        }
-        if let buf = index2DBuffer {
-            print("  - Cleaning up 2D index buffer")
-            buf.cleanup()
-        }
-        
-        // Clean up other buffers  
+        //Clean up buffers directly
+        vertex2DBuffer?.cleanup()
+        index2DBuffer?.cleanup()
         staticVertexBuffer?.cleanup()
         dynamicVertexBuffer?.cleanup()
         transferBuffer?.cleanup()
