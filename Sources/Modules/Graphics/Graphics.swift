@@ -137,12 +137,15 @@ public class Graphics {
     public func renderUIElements() {
         guard !uiElements.isEmpty else { return }
         
-        // Reset buffer offsets BEFORE uploading (critical!)
-        graphicsResourceManager?.reset2DBuffers()
-        
         // Check if any elements are dirty (need GPU upload)
         let dirtyElements = uiElements.filter { $0.isDirty }
         let newElements = uiElements.filter { !$0.isUploaded }
+        
+        // Only reset buffers IF we need to upload something
+        if !dirtyElements.isEmpty || !newElements.isEmpty {
+            // Reset buffer offsets BEFORE uploading (critical!)
+            graphicsResourceManager?.reset2DBuffers()
+        }
         
         if !dirtyElements.isEmpty || !newElements.isEmpty {
             // Upload changed elements
@@ -178,8 +181,8 @@ public class Graphics {
         
         do {
             for element in elements {
-                // Use dynamic allocation for UI (same as dynamic 3D models)
-                if let vertexRegion = try graphicsResourceManager?.allocateDynamicVertices(vertices: element.vertices) {
+                // Use 2D allocation for UI elements (NOT 3D allocation!)  
+                if let vertexRegion = try graphicsResourceManager?.allocate2DVertices(vertices: element.vertices) {
                     if let indexRegion = try graphicsResourceManager?.allocate2DIndices(indices: element.indices) {
                         // Store offsets like Mesh does (not BufferRegion)
                         element.markUploaded(
@@ -357,6 +360,20 @@ public class Graphics {
 
     public func cleanup() {
         print("🧹 Starting Graphics cleanup in proper order...")
+        
+        // 0. CRITICAL: Wait for all GPU operations to complete BEFORE destroying anything
+        vkLog("🔄 Waiting for GPU to finish all operations before cleanup...")
+        vkDeviceWaitIdle(renderer.logicalDevice)
+        
+        // Also reset command buffers to clear any resource references
+        if let cmdBuf = renderer.commandBuffer {
+            vkLog("🔄 Resetting command buffer to clear resource references")
+            vkResetCommandBuffer(cmdBuf, 0)
+        }
+        
+        // Wait again after reset to ensure all references are cleared
+        vkDeviceWaitIdle(renderer.logicalDevice)
+        vkLog("✅ GPU operations completed, safe to destroy resources")
         
         // 1. Clean up pipelines first (they reference resources)
         pipelineManager?.cleanupAllPipelines()

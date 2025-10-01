@@ -62,9 +62,12 @@ public class VulkanShader: Shader {
         }
         
         // Clean up descriptor resources
-        for layout in descriptorSetLayouts {
-            if let layout = layout {
+        for i in 0..<descriptorSetLayouts.count {
+            if let layout = descriptorSetLayouts[i] {
+                vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(layout) in VulkanShader")
                 vkDestroyDescriptorSetLayout(device, layout, nil)
+                vkLog("✅ VkDescriptorSetLayout DESTROYED: \(layout) in VulkanShader")
+                descriptorSetLayouts[i] = nil  // Now we can set it to nil
             }
         }
         descriptorSetLayouts.removeAll()
@@ -281,6 +284,9 @@ public class VulkanShader: Shader {
             let result = vkCreateDescriptorSetLayout(device, &layoutInfo, nil, &layout)
             guard result == VK_SUCCESS else {
                 throw ShaderError.bindingFailed("Failed to create descriptor set layout")
+            }
+            if let createdLayout = layout {
+                vkLog("🔷 VkDescriptorSetLayout CREATED: \(createdLayout) in VulkanShader")
             }
             return layout
         }

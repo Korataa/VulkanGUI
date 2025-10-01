@@ -47,6 +47,9 @@ public class MaterialShaderBinding {
             layoutInfo.pBindings = ptr.baseAddress
             var layout: VkDescriptorSetLayout?
             let result = vkCreateDescriptorSetLayout(device, &layoutInfo, nil, &layout)
+            if let createdLayout = layout {
+                vkLog("🔷 VkDescriptorSetLayout CREATED: \(createdLayout) in MaterialShaderBinding")
+            }
             guard result == VK_SUCCESS else {
                 fatalError("Failed to create material descriptor set layout")
             }
@@ -202,13 +205,21 @@ public class MaterialShaderBinding {
     var currentSet: VkDescriptorSet? { 
         descriptorSets.isEmpty ? nil : descriptorSets[0]
     }
+
+    deinit {
+        cleanup()
+    }
     
     func cleanup() {
         if let pool = descriptorPool {
             vkDestroyDescriptorPool(device, pool, nil)
+            descriptorPool = nil
         }
         if let layout = descriptorSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(layout) in MaterialShaderBinding")
             vkDestroyDescriptorSetLayout(device, layout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(layout) in MaterialShaderBinding")
+            descriptorSetLayout = nil
         }
         // Material buffer is managed by VulkanRenderer, not here
     }

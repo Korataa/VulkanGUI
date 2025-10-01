@@ -312,39 +312,57 @@ same here 0       1
 
         // Destroy all descriptor set layouts (including 2D and UI)
         if let frameSetLayout = frameSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(frameSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, frameSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(frameSetLayout) in VulkanRenderer")
             self.frameSetLayout = nil
         }
         if let transformSetLayout = transformSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(transformSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, transformSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(transformSetLayout) in VulkanRenderer")
             self.transformSetLayout = nil
         }
         if let materialSetLayout3D = materialSetLayout3D {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(materialSetLayout3D) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, materialSetLayout3D, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(materialSetLayout3D) in VulkanRenderer")
             self.materialSetLayout3D = nil
         }
         if let materialSetLayout2D = materialSetLayout2D {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(materialSetLayout2D) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, materialSetLayout2D, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(materialSetLayout2D) in VulkanRenderer")
             self.materialSetLayout2D = nil
         }
         if let postProcessingSetLayout = postProcessingSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(postProcessingSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, postProcessingSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(postProcessingSetLayout) in VulkanRenderer")
             self.postProcessingSetLayout = nil
         }
         if let transform2DSetLayout = transform2DSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(transform2DSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, transform2DSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(transform2DSetLayout) in VulkanRenderer")
             self.transform2DSetLayout = nil
         }
         if let material2DSetLayout = material2DSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(material2DSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, material2DSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(material2DSetLayout) in VulkanRenderer")
             self.material2DSetLayout = nil
         }
         if let uiProjectionSetLayout = uiProjectionSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(uiProjectionSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, uiProjectionSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(uiProjectionSetLayout) in VulkanRenderer")
             self.uiProjectionSetLayout = nil
         }
         if let uiMaterialSetLayout = uiMaterialSetLayout {
+            vkLog("🔶 VkDescriptorSetLayout DESTROYING: \(uiMaterialSetLayout) in VulkanRenderer")
             vkDestroyDescriptorSetLayout(logicalDevice, uiMaterialSetLayout, nil)
+            vkLog("✅ VkDescriptorSetLayout DESTROYED: \(uiMaterialSetLayout) in VulkanRenderer")
             self.uiMaterialSetLayout = nil
         }
 
@@ -453,12 +471,6 @@ same here 0       1
         createTransformLayout()
         createMaterialLayout3D()
         createMaterialLayout2D()
-        
-        // Create 2D and UI specific layouts
-        createTransform2DLayout()
-        createMaterial2DLayout()
-        createUIProjectionLayout()
-        createUIMaterialLayout()
         
         // Create 2D and UI specific layouts
         createTransform2DLayout()
@@ -1531,6 +1543,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create frame descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(frameSetLayout!) in VulkanRenderer.createFrameLayout()")
     }
 
     func createTransformLayout() {
@@ -1552,6 +1565,7 @@ same here 0       1
         if transformLayoutResult != VK_SUCCESS {
             fatalError("Failed to create transform descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(transformSetLayout!) in VulkanRenderer.createTransformLayout()")
     }
 
     func createMaterialLayout3D() {
@@ -1583,6 +1597,7 @@ same here 0       1
         if materialLayoutResult != VK_SUCCESS {
             fatalError("Failed to create material descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(materialSetLayout3D!) in VulkanRenderer.createMaterialLayout3D()")
     }
 
     func createMaterialLayout2D() {
@@ -1614,6 +1629,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create material descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(materialSetLayout2D!) in VulkanRenderer.createMaterialLayout2D()")
     }
     
     // 2D Transform Layout (Set 0 for 2D shaders: projection + model matrix)
@@ -1639,6 +1655,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create 2D transform descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(transform2DSetLayout!) in VulkanRenderer.createTransform2DLayout()")
     }
     
     // 2D Material Layout (Set 1 for 2D shaders: material data + texture)
@@ -1671,6 +1688,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create 2D material descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(material2DSetLayout!) in VulkanRenderer.createMaterial2DLayout()")
     }
     
     // UI Projection Layout (Set 0 for UI shaders: projection + screen size)
@@ -1696,6 +1714,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create UI projection descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(uiProjectionSetLayout!) in VulkanRenderer.createUIProjectionLayout()")
     }
     
     // UI Material Layout (Set 1 for UI shaders: material data + texture)
@@ -1728,6 +1747,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create UI material descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(uiMaterialSetLayout!) in VulkanRenderer.createUIMaterialLayout()")
     }
 
     func createPostProcessingLayout() {
@@ -1767,6 +1787,7 @@ same here 0       1
         if result != VK_SUCCESS {
             fatalError("Failed to create post-processing descriptor set layout!")
         }
+        vkLog("🔷 VkDescriptorSetLayout CREATED: \(postProcessingSetLayout!) in VulkanRenderer.createPostProcessingLayout()")
     }
 
     func createDescriptorPool() {
