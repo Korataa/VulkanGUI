@@ -2286,6 +2286,8 @@ same here 0       1
         var memProperties = VkPhysicalDeviceMemoryProperties()
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties)
 
+        // TODO: Replace this massive tuple conversion with InlineArray when Swift 6.2+ features are stable
+        // memProperties.memoryTypes is a huge tuple that should be replaced with a proper array-like structure
         let memoryTypesArray = tupleToArray(memProperties.memoryTypes) as! [VkMemoryType]
 
         for i in 0..<memProperties.memoryTypeCount {
