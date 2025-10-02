@@ -1,0 +1,24 @@
+My ui system:
+
+1. Retained mode
+    -persistant widget tree with state
+    -widgets store their properties and children; the system redraws on state change like React or SwiftUI
+    -Event handling is tracked in the retained tree.
+
+2. Engine-coupled
+    -Uses my engine input, rendering, and math types directly, fuck decoupling for now
+
+3. Same shit for games and apps
+    -My api will handle both game and apps
+    -Styling will allow for both game-look and app-look
+    -Probably have something like flexbox but also have absolute positioning
+
+4. React/SwiftUI style api(ish)
+    -Declarative widget composition
+    -State drive updates: changing a value updates the ui automatically
+
+5. (Optional) World-space rendering
+    -Can render ui to a texture and place it on the 3d world (health bars, floating menus think sci fi
+    type game or maybe fallout pipboy, diagetic ui)
+    -Will use the same retained tree - just a different render pass and probably projection matrix
+    
