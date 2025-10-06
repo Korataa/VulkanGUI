@@ -33,15 +33,23 @@ public struct Element {
     }
 }
 
+public enum ElementType {
+    case rect(color: Color, textureID: UInt32? = nil)
+    case text(content: String, font: Font? = nil)
+    case container
+    case custom(renderer: (Element) -> [Quad])
+}
+
 public extension Element {
     var center: Vector2 { bounds.center }
 
-    mutating func addChild(_ child: Element) { 
-        children.append(child) 
+    mutating func addChild(_ child: Element) {
+        children.append(child)
+        markDirty()
     }
 
-    func layout(in size: Vector2) {
-
+    mutating func markDirty() {
+        isDirty = true
     }
 
     //Generate quads for this element and its children recursively
