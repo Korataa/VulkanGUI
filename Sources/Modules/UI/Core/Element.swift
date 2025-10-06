@@ -21,6 +21,16 @@ public struct Element {
     public var children: [Element]
     public var bounds: Rectangle
     public var style: Style
+    public var elementType: ElementType
+
+    public var isDirty: Bool = true
+
+    public init(type: ElementType, bounds: Rectangle = Rectangle.zero, style: Style = Style(), children: [Element] = []) {
+        self.elementType = type
+        self.bounds = bounds
+        self.style = style
+        self.children = children
+    }
 }
 
 public extension Element {
@@ -34,7 +44,8 @@ public extension Element {
 
     }
 
-    func generateVertices() -> [Vertex2D] {
+    //Generate quads for this element and its children recursively
+    func generateQuads() -> [Quad] {
 
     }
     

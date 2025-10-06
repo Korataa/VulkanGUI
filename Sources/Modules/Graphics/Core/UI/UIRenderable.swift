@@ -7,7 +7,7 @@ import Foundation
 /// - Static UI elements could store GPU offsets only (like static 3D models)
 /// - Dynamic UI could use a write-only GPU buffer approach
 /// - Only optimize if UI becomes a performance bottleneck (unlikely in 3D games)
-public class UIElement {
+public class UIRenderable {
     public var position: SIMD2<Float>
     public var size: SIMD2<Float>
     public var color: Color
@@ -33,7 +33,7 @@ public class UIElement {
         self.textureID = textureID
         
         // Create a quad (2 triangles)
-        self.vertices = UIElement.createQuadVertices(position: position, size: size, color: color)
+        self.vertices = UIRenderable.createQuadVertices(position: position, size: size, color: color)
         self.indices = [0, 1, 2, 0, 2, 3]  // Two triangles forming a quad
     }
     
@@ -64,7 +64,7 @@ public class UIElement {
         if let newSize = size { self.size = newSize }
         
         // Recreate vertices with new transform
-        self.vertices = UIElement.createQuadVertices(position: self.position, size: self.size, color: self.color)
+        self.vertices = UIRenderable.createQuadVertices(position: self.position, size: self.size, color: self.color)
         
         // Mark dirty for next frame
         markDirty()
