@@ -90,11 +90,9 @@ public class Graphics {
             fatalError("Failed to initialize graphics resource manager: \(error)")
         }
     }
-
-    // MARK: - High-Level Rendering API
     
-    /// Render a single 3D model - this is the high-level API game code uses
-    public func render3DModel(_ model: Model) {
+    /// Render a single 3D model - used by this class internally
+    private func render3DModel(_ model: Model) {
         let pipeline = get3DPipeline()
         if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
             vulkanPipeline.render(models: [model])
@@ -102,7 +100,7 @@ public class Graphics {
     }
     
     /// Render multiple 3D models efficiently 
-    public func render3DModels(_ models: [Model]) {
+    private func render3DModels(_ models: [Model]) {
         print("🎯 Graphics.render3DModels called with \(models.count) models")
         if !models.isEmpty {
             let pipeline = get3DPipeline()

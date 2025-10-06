@@ -21,4 +21,3 @@ My ui system:
     -Can render ui to a texture and place it on the 3d world (health bars, floating menus think sci fi
     type game or maybe fallout pipboy, diagetic ui)
     -Will use the same retained tree - just a different render pass and probably projection matrix
-    
