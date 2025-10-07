@@ -54,7 +54,39 @@ public extension Element {
 
     //Generate quads for this element and its children recursively
     func generateQuads() -> [Quad] {
+        var quads: [Quad] = []
 
+        //Generate quad for this element based on its type
+        switch elementType {
+            case .rect(let color, let textureID):
+                quads.append(Quad(
+                    position: bounds.position,
+                    size: Vector2(bounds.width, bounds.height),
+                    color: color,
+                    textureID: textureID
+                ))
+            case .text(let content, let font):
+                //Text rendering would be more complex -might generate multiple quads
+                //for now use a placeholder
+                break
+            case .container:
+                //Container itself doesnt render directly, just its children
+                break
+            case .custom(let renderer):
+                quads.append(contentsOf: renderer(self))
+        }
+
+        //recursively collect quads from children
+        for child in children {
+            quads.append(contentsOf: child.generateQuads())
+        }
+
+        return quads
+    }
+
+    func layout(in size: Vector2) {
+        //layout logic - calculate bounds for children
+        //this would be implemnted based on layout type
     }
     
 }

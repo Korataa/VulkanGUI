@@ -37,7 +37,7 @@ public class Graphics {
     }
 
     var renderModels: [Model] = []        //Models to render
-    private var uiElements: [UIElement] = []      //UI elements to render
+    private var uiElements: [UIRenderable] = []      //UI elements to render
     private var debugPrinted = false     // Only print debug info once
     
     /// Public accessor for UI elements count
@@ -117,13 +117,13 @@ public class Graphics {
     }
     
     /// Add a UI element to be rendered every frame
-    public func addUIElement(_ element: UIElement) {
-        uiElements.append(element)
+    public func addUIElement(_ renderable: UIRenderable) {
+        uiElements.append(renderable)
     }
     
     /// Remove a UI element from rendering
-    public func removeUIElement(_ element: UIElement) {
-        uiElements.removeAll { $0 === element }
+    public func removeUIElement(_ renderable: UIRenderable) {
+        uiElements.removeAll { $0 === renderable }
     }
     
     /// Clear all UI elements
@@ -172,18 +172,18 @@ public class Graphics {
     /// - Dynamic UI (health bars, animations) -> use current approach
     /// - Semi-dynamic UI (text) -> hybrid approach with change detection
     /// Only optimize if UI becomes a bottleneck (very unlikely in 3D games)
-    private func uploadUIElements(_ elements: [UIElement]) {
-        guard !elements.isEmpty else { return }
-        
-        print("📤 Uploading \(elements.count) dynamic UI elements")
-        
+    private func uploadUIElements(_ renderables: [UIRenderable]) {
+        guard !renderables.isEmpty else { return }
+
+        print("📤 Uploading \(renderables.count) dynamic UI elements")
+
         do {
-            for element in elements {
-                // Use 2D allocation for UI elements (NOT 3D allocation!)  
-                if let vertexRegion = try graphicsResourceManager?.allocate2DVertices(vertices: element.vertices) {
-                    if let indexRegion = try graphicsResourceManager?.allocate2DIndices(indices: element.indices) {
+            for renderable in renderables {
+                // Use 2D allocation for UI elements (NOT 3D allocation!)
+                if let vertexRegion = try graphicsResourceManager?.allocate2DVertices(vertices: renderable.vertices) {
+                    if let indexRegion = try graphicsResourceManager?.allocate2DIndices(indices: renderable.indices) {
                         // Store offsets like Mesh does (not BufferRegion)
-                        element.markUploaded(
+                        renderable.markUploaded(
                             vertexOffset: vertexRegion.offset / MemoryLayout<Vertex2D>.stride,
                             indexOffset: indexRegion.offset / MemoryLayout<UInt32>.stride
                         )
@@ -196,21 +196,21 @@ public class Graphics {
     }
     
     /// Add UI element to batch (much more efficient than individual rendering)
-    private func batchUIElement(_ element: UIElement, pipeline: VulkanPipelineImpl) {
-        // Get UI vertices and indices from element 
-        let vertices = element.vertices
-        let indices = element.indices
-        
+    private func batchUIElement(_ renderable: UIRenderable, pipeline: VulkanPipelineImpl) {
+        // Get UI vertices and indices from element
+        let vertices = renderable.vertices
+        let indices = renderable.indices
+
         // Add to batch instead of immediate rendering
-        pipeline.batchUIQuad(vertices: vertices, indices: indices, color: element.color, textureID: element.textureID)
+        pipeline.batchUIQuad(vertices: vertices, indices: indices, color: renderable.color, textureID: renderable.textureID)
     }
     
     /// Create a simple 2D sprite/quad - convenience method
-    public func createSprite(at position: (Float, Float), size: (Float, Float), color: Color = Color.white, textureID: UInt32? = nil) -> UIElement {
-        return UIElement(position: SIMD2(position.0, position.1), 
-                        size: SIMD2(size.0, size.1), 
-                        color: color, 
-                        textureID: textureID)
+    public func createSprite(at position: (Float, Float), size: (Float, Float), color: Color = Color.white, textureID: UInt32? = nil) -> UIRenderable {
+        return UIRenderable(position: SIMD2(position.0, position.1), 
+                           size: SIMD2(size.0, size.1), 
+                           color: color, 
+                           textureID: textureID)
     }
 
     //MARK: - Frame Management (Input Latency Optimized)

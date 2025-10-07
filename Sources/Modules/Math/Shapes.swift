@@ -30,4 +30,12 @@ public extension Rectangle {
         !(right < other.left || left > other.right ||
             bottom < other.top || top > other.bottom)
     }
+
+    var size: Vector2 {
+        Vector2(width, height)
+    }
+
+    static var zero: Rectangle {
+        Rectangle(position: Vector2(0, 0), width: 0, height: 0)
+    }
 }
