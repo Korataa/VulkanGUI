@@ -17,11 +17,54 @@
 // This matches the 3D approach: Models -> Graphics (not vertices -> Graphics)
 // Benefits: Clean separation, Graphics controls optimization, easier to extend
 
+// Layout system types
+public enum LayoutType {
+    case flex(direction: FlexDirection, justify: JustifyContent, align: AlignItems)
+    case absolute(position: Vector2)
+    case grid(columns: Int, rows: Int)
+}
+
+public enum FlexDirection {
+    case row, column
+}
+
+public enum JustifyContent {
+    case start, center, end, spaceBetween, spaceAround
+}
+
+public enum AlignItems {
+    case start, center, end, stretch
+}
+
+// Temporary font type (we'll enhance this later)
+public struct Font {
+    public let name: String
+    public let size: Float
+    
+    public init(name: String, size: Float) {
+        self.name = name
+        self.size = size
+    }
+    
+    public static func system(size: Float) -> Font {
+        return Font(name: "system", size: size)
+    }
+}
+
 public struct Element {
     public var children: [Element]
     public var bounds: Rectangle
     public var style: Style
     public var elementType: ElementType
+    
+    // Layout properties
+    public var layoutType: LayoutType = .flex(direction: .column, justify: .start, align: .stretch)
+    public var spacing: Float = 8.0
+    public var padding: Spacing = Spacing()
+    
+    // Event handlers
+    public var tapHandler: (() -> Void)? = nil
+    public var hoverHandler: ((Bool) -> Void)? = nil
 
     public var isDirty: Bool = true
 
@@ -87,6 +130,43 @@ public extension Element {
     func layout(in size: Vector2) {
         //layout logic - calculate bounds for children
         //this would be implemnted based on layout type
+    }
+    
+    // Method chaining API for progressive explicitness
+    func spacing(_ value: Float) -> Element {
+        var copy = self
+        copy.spacing = value
+        return copy
+    }
+    
+    func padding(_ spacing: Spacing) -> Element {
+        var copy = self
+        copy.padding = spacing
+        return copy
+    }
+    
+    func padding(_ all: Float) -> Element {
+        var copy = self
+        copy.padding = Spacing(all: all)
+        return copy
+    }
+    
+    func background(_ color: Color) -> Element {
+        var copy = self
+        copy.style.backgroundColor = color
+        return copy
+    }
+    
+    func onTap(_ handler: @escaping () -> Void) -> Element {
+        var copy = self
+        copy.tapHandler = handler
+        return copy
+    }
+    
+    func layoutType(_ type: LayoutType) -> Element {
+        var copy = self
+        copy.layoutType = type
+        return copy
     }
     
 }

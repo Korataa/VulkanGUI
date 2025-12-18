@@ -40,6 +40,10 @@ let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceMa
 // Use ResourceSystem for all resource operations, not graphics.resourceManager directly
 let assetLoader = AssetLoader(resourceManager: resourceSystem.graphicsResourceManager)
 
+// Create UI Manager early (before model loading)
+print("Creating UI Manager...")
+let uiManager = UIManager(graphics: graphics)
+
 if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf") {
     let model = assetLoader.createModel(from: loadedModel)
     
@@ -53,26 +57,29 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     graphics.addModel(model: model)
     print("Model loaded successfully!")
     
-    // Test UI elements - create some UI overlays using screen pixel coordinates
-    print("Creating test UI elements...")
+    // Create declarative UI - same visual result but cleaner code!
+    let gameHUD = Column(spacing: 20) {
+        // Top status bar
+        Row(spacing: 300) {
+            Text("HP: 100")
+                .background(.red)
+            
+            Text("Score: 0") 
+                .background(.green)
+        }
+        
+        Spacer()
+        
+        // Bottom left button
+        Text("Menu")
+            .background(.white)
+    }
+    .padding(20)
     
-    // Create multiple UI elements positioned to not cover the center (where 3D model is)
-    // Screen is 800x600, so avoid center area around (400, 300)
-    // Using larger spacing to ensure no overlap
+    // Set the UI - automatic rendering!
+    uiManager.setRoot(gameHUD)
     
-    // Red square in top-left corner
-    let redSquare = graphics.createSprite(at: (80, 80), size: (60, 60), color: Color.red)
-    graphics.addUIElement(redSquare)
-    
-    // Green square in top-right corner  
-    let greenSquare = graphics.createSprite(at: (720, 80), size: (60, 60), color: Color.green)
-    graphics.addUIElement(greenSquare)
-    
-    // White square in bottom-left corner (moved further down)
-    let whiteSquare = graphics.createSprite(at: (80, 520), size: (60, 60), color: Color.white)
-    graphics.addUIElement(whiteSquare)
-    
-    print("✅ UI elements created: \(graphics.uiElementCount) elements")
+    print("✅ Declarative UI created with new system!")
     
     // Now that textures are loaded, create Vulkan textures
     graphics.createTexturesFromResourceManager()
@@ -179,6 +186,9 @@ while !quit {
     // Use the new input-latency optimized frame management
     if graphics.createFrame() {
         // Frame is ready for rendering
+        
+        // Update UI system (automatic rebuilding if needed)
+        uiManager.update() // ✅ FIXED: Memory leak resolved with smart caching
         
         // TODO: Add proper input polling here for minimal input lag
         // For now, input is already processed above

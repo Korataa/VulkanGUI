@@ -2907,7 +2907,7 @@ same here 0       1
         batchedUIIndices.append(contentsOf: adjustedIndices)
         uiBatchCount += 1
         
-        print("🔢 Batched UI quad \(uiBatchCount): \(vertices.count) vertices, \(indices.count) indices")
+        // Debug: print("🔢 Batched UI quad \(uiBatchCount): \(vertices.count) vertices, \(indices.count) indices")
     }
     
     /// Render all batched UI elements in one efficient draw call
