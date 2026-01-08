@@ -295,27 +295,20 @@ final class VulkanPipelineImpl: Pipeline {
         vulkanRenderer.drawModelsWithDynamicOffsets(models, pipelineLayout: layout, transformDescriptorSet: transformSet)
     }
     
-    func renderUIQuad(vertices: [Vertex2D], indices: [UInt32], color: Color, textureID: UInt32?) {
+    /// Clean UI rendering that mirrors 3D model rendering
+    /// Uses 2D buffers and existing UI descriptor sets
+    func renderUI(models: [ModelUI]) {
+        print("🎨 VulkanPipelineImpl.renderUI() called with \(models.count) UI models")
         // Bind this UI pipeline and its descriptor sets
         bind()
         
-        // Draw UI quad using VulkanRenderer's 2D drawing methods
-        vulkanRenderer.drawUIQuad(vertices: vertices, indices: indices, color: color, textureID: textureID)
-    }
-    
-    // MARK: - Batched UI Rendering for Performance
-    
-    func batchUIQuad(vertices: [Vertex2D], indices: [UInt32], color: Color, textureID: UInt32?) {
-        // Add to batch instead of immediate rendering
-        vulkanRenderer.batchUIQuad(vertices: vertices, indices: indices, color: color, textureID: textureID)
-    }
-    
-    func flushUIBatch() {
-        // Bind pipeline for batched rendering
-        bind()
-        
-        // Flush all batched UI elements
-        vulkanRenderer.flushUIBatch()
+        // Draw all UI models using existing UI infrastructure
+        guard let layout = pipelineLayout else {
+            print("❌ Missing pipeline layout!")
+            return
+        }
+        print("✅ About to call drawUIModelsWithOffsets with \(models.count) UI models")
+        vulkanRenderer.drawUIModelsWithOffsets(models, pipelineLayout: layout)
     }
 
     func unbind() {

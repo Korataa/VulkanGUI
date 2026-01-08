@@ -131,7 +131,7 @@ public class Graphics {
         uiElements.removeAll()
     }
     
-    /// Render all UI elements using the UI pipeline with simple caching
+    /// Render all UI elements using the clean ModelUI architecture (mirrors 3D rendering)
     public func renderUIElements() {
         guard !uiElements.isEmpty else { return }
         
@@ -139,29 +139,38 @@ public class Graphics {
         let dirtyElements = uiElements.filter { $0.isDirty }
         let newElements = uiElements.filter { !$0.isUploaded }
         
-        // Only reset buffers IF we need to upload something
+        // Only reset buffers AND upload IF we actually have dirty/new elements
         if !dirtyElements.isEmpty || !newElements.isEmpty {
+            print("📤 Found \(dirtyElements.count) dirty + \(newElements.count) new UI elements - uploading")
             // Reset buffer offsets BEFORE uploading (critical!)
             graphicsResourceManager?.reset2DBuffers()
+            // Mark ALL existing elements as needing re-upload after reset
+            for element in uiElements {
+                element.markNotUploaded()
+            }
+            // Upload ALL elements (since we reset the buffer)
+            uploadUIElements(uiElements)
+        } else {
+            print("♻️ No UI changes detected - skipping upload")
         }
         
-        if !dirtyElements.isEmpty || !newElements.isEmpty {
-            // Upload changed elements
-            uploadUIElements(dirtyElements + newElements)
-        }
+        let uiModels = [ModelUI(from: uiElements)]
         
-        // Render all elements using batching system (simplified for now)
-        let pipeline = getUIPipeline()
-        guard let vulkanPipeline = pipeline as? VulkanPipelineImpl else {
-            print("❌ Failed to cast UI pipeline to VulkanPipelineImpl")
+        // Filter out empty models
+        let nonEmptyModels = uiModels.filter { !$0.isEmpty }
+        guard !nonEmptyModels.isEmpty else {
+            print("📦 No UI models to render - INTENTIONALLY BROKEN FOR TESTING")
             return
         }
         
-        for element in uiElements {
-            batchUIElement(element, pipeline: vulkanPipeline)
+        // Use existing UI pipeline (same pattern as 3D rendering)
+        let pipeline = getUIPipeline()
+        if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+            print("🎨 Rendering UI using ModelUI architecture")
+            vulkanPipeline.renderUI(models: nonEmptyModels)
+        } else {
+            print("❌ Failed to get UI pipeline for rendering")
         }
-        
-        vulkanPipeline.flushUIBatch()
     }
     
     /// Upload UI elements to GPU using dynamic buffers (like dynamic 3D models)
@@ -193,16 +202,6 @@ public class Graphics {
         } catch {
             print("❌ Error uploading dynamic UI elements: \(error)")
         }
-    }
-    
-    /// Add UI element to batch (much more efficient than individual rendering)
-    private func batchUIElement(_ renderable: UIRenderable, pipeline: VulkanPipelineImpl) {
-        // Get UI vertices and indices from element
-        let vertices = renderable.vertices
-        let indices = renderable.indices
-
-        // Add to batch instead of immediate rendering
-        pipeline.batchUIQuad(vertices: vertices, indices: indices, color: renderable.color, textureID: renderable.textureID)
     }
     
     /// Create a simple 2D sprite/quad - convenience method

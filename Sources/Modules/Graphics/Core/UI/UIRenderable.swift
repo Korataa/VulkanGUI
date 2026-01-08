@@ -88,6 +88,12 @@ public class UIRenderable {
         _isDirty = false
     }
     
+    /// Mark as not uploaded (when buffers are reset) - internal use only
+    internal func markNotUploaded() {
+        _isUploaded = false
+        _isDirty = true
+    }
+    
     /// Get vertex offset in the 2D buffer (like Mesh does)
     internal func getVertexOffset() -> Int { return vertexOffset }
     

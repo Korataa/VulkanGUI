@@ -2875,6 +2875,51 @@ same here 0       1
             currentTransformIndex += 1
         }
     }
+    
+    /// Clean UI rendering method that mirrors 3D model rendering
+    /// Uses 2D buffers and existing UI descriptor sets
+    func drawUIModelsWithOffsets(_ uiModels: [ModelUI], pipelineLayout: VkPipelineLayout) {
+        print("🎨 drawUIModelsWithOffsets called with \(uiModels.count) UI models")
+        
+        guard !uiModels.isEmpty else {
+            print("📦 No UI models to render")
+            return
+        }
+        
+        // Use resource manager to access 2D buffers (same as UI upload system)
+        resourceManager?.withVertex2DBuffer { vertexBuffer in
+            resourceManager?.withIndex2DBuffer { indexBuffer in
+                // Bind 2D buffers once for all UI models
+                print("🎨 Binding 2D vertex buffer: \(vertexBuffer.bufferHandle.asVulkanBuffer())")
+                vkCmdBindVertexBuffers(commandBuffer, 0, 1, 
+                                     withUnsafePointer(to: vertexBuffer.bufferHandle.asVulkanBuffer()) { $0 }, 
+                                     withUnsafePointer(to: VkDeviceSize(0)) { $0 })
+                
+                print("🎨 Binding 2D index buffer: \(indexBuffer.bufferHandle.asVulkanBuffer())")
+                vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 
+                                   VkDeviceSize(0), VK_INDEX_TYPE_UINT32)
+                
+                // Draw all UI models
+                for uiModel in uiModels {
+                    for uiMesh in uiModel.meshes {
+                        print("🎨 Drawing UI mesh: vertices=\(uiMesh.vertexCount), indices=\(uiMesh.indexCount)")
+                        print("    - vertexOffset=\(uiMesh.vertexOffset), indexOffset=\(uiMesh.indexOffset)")
+                        
+                        // Draw this UI element using cached offsets (no new allocations!)
+                        vkCmdDrawIndexed(
+                            commandBuffer!,
+                            UInt32(uiMesh.indexCount),
+                            1,
+                            UInt32(uiMesh.indexOffset),
+                            Int32(uiMesh.vertexOffset),
+                            0
+                        )
+                    }
+                }
+                print("✅ Rendered \(uiModels.count) UI models from cached 2D buffer data (zero allocations)")
+            }
+        }
+    }
 
     func bindVertexBuffer(_ buffer: VkBuffer, offset: VkDeviceSize = 0) {
         let buffers: [VkBuffer?] = [buffer]
@@ -2959,6 +3004,51 @@ same here 0       1
         batchedUIVertices.removeAll(keepingCapacity: true)
         batchedUIIndices.removeAll(keepingCapacity: true)
         uiBatchCount = 0
+    }
+
+    /// Render UI elements from already-uploaded buffer data (NO memory allocation)
+    /// This is the CLEAN rendering method that uses cached GPU data
+    func renderUploadedUIElements(_ elements: [UIRenderable]) {
+        guard !elements.isEmpty else { 
+            print("📦 No uploaded UI elements to render")
+            return 
+        }
+        
+        // Only render elements that have been successfully uploaded
+        let uploadedElements = elements.filter { $0.isUploaded }
+        guard !uploadedElements.isEmpty else {
+            print("⚠️ No uploaded UI elements found - call uploadUIElements first")
+            return
+        }
+        
+        print("🎨 Rendering \(uploadedElements.count) uploaded UI elements from cache")
+        
+        guard let resourceManager = resourceManager else {
+            print("❌ No resource manager available")
+            return
+        }
+        
+        // Render each uploaded element using its cached buffer offsets
+        resourceManager.withVertex2DBuffer { vertexBuffer in
+            resourceManager.withIndex2DBuffer { indexBuffer in
+                for element in uploadedElements {
+                    // Use cached offsets (no new allocations!)
+                    let vertexOffset = VkDeviceSize(element.vertexOffset * MemoryLayout<Vertex2D>.stride)
+                    let indexOffset = VkDeviceSize(element.indexOffset * MemoryLayout<UInt32>.stride)
+                    
+                    // Bind buffers with cached offsets
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, 
+                                         withUnsafePointer(to: vertexBuffer.bufferHandle.asVulkanBuffer()) { $0 }, 
+                                         withUnsafePointer(to: vertexOffset) { $0 })
+                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 
+                                       indexOffset, VK_INDEX_TYPE_UINT32)
+                    
+                    // Draw this element using its uploaded data
+                    vkCmdDrawIndexed(commandBuffer, UInt32(element.indices.count), 1, 0, 0, 0)
+                }
+                print("✅ Rendered \(uploadedElements.count) UI elements from cached data (zero allocations)")
+            }
+        }
     }
 
     func drawUIQuad(vertices: [Vertex2D], indices: [UInt32], color: Color, textureID: UInt32?) {
