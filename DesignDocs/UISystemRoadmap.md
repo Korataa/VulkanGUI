@@ -1,5 +1,8 @@
 # UI System Development Roadmap
 
+TODO:
+Sometime eventually differentiate between apps and games, but for now its fine to tie them together. Later for professionalism and also just for organization, fix it!!!!!!!
+
 ## Project Vision
 DeckRPG is designed as both a game engine and app engine, capable of building:
 - Game UIs (inventory, HUD, menus, status displays)
