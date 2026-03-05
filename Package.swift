@@ -4,9 +4,10 @@ import PackageDescription
 
 var unsafeIncludeFlags = [""]
 #if os(Windows)
-    // Allow override via environment variable, fallback to vcpkg default
-    let windowsIncludePath = ProcessInfo.processInfo.environment["VULKAN_SDK_INCLUDE"] ?? "Z:\\dev\\vcpkg\\installed\\x64-windows\\include"
-    unsafeIncludeFlags = ["-I\(windowsIncludePath)"]
+    // Vulkan from SDK, SDL3 from vcpkg
+    let vulkanIncludePath = "C:\\VulkanSDK\\1.4.341.1\\Include"
+    let vcpkgIncludePath = "C:\\vcpkg\\installed\\x64-windows\\include"
+    unsafeIncludeFlags = ["-I\(vulkanIncludePath)", "-I\(vcpkgIncludePath)"]
 #else
     unsafeIncludeFlags = 
     [
@@ -16,11 +17,13 @@ var unsafeIncludeFlags = [""]
 
 var unsafeLibFlags = [""]
 #if os(Windows)
-    // Allow override via environment variable, fallback to vcpkg default
-    let windowsLibPath = ProcessInfo.processInfo.environment["VULKAN_SDK_LIB"] ?? "Z:\\dev\\vcpkg\\installed\\x64-windows\\lib"
+    // SDL3 from vcpkg, Vulkan from SDK
+    let vulkanLibPath = "C:\\VulkanSDK\\1.4.341.1\\Lib"
+    let vcpkgLibPath = "C:\\vcpkg\\installed\\x64-windows\\lib"
     unsafeLibFlags = 
     [
-        "-L\(windowsLibPath)",
+        "-L\(vulkanLibPath)",
+        "-L\(vcpkgLibPath)",
         "-lSDL3",
         "-lvulkan-1"
     ]
@@ -79,9 +82,25 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Modules",
-            dependencies: ["CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image"],
-            path: "Sources/Modules",
+            name: "Core",
+            dependencies: [],
+            path: "Sources/Core",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
+        .target(
+            name: "Audio",
+            dependencies: ["Platform"],
+            path: "Sources/Audio",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
+        .target(
+            name: "Platform",
+            dependencies: ["Core", "CSDL3", "Cvulkan"],
+            path: "Sources/Platform",
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
             ],
@@ -92,10 +111,32 @@ let package = Package(
                 .unsafeFlags(unsafeLibFlags)
             ]
         ),
+        .target(
+            name: "Graphics",
+            dependencies: ["Core", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image"],
+            path: "Sources/Graphics",
+            cSettings: [
+                .unsafeFlags(unsafeIncludeFlags)
+            ],
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ],
+            linkerSettings: [
+                .unsafeFlags(unsafeLibFlags)
+            ]
+        ),
+        .target(
+            name: "Assets",
+            dependencies: ["Core", "Graphics", "Cgltf", "Cstb_image"],
+            path: "Sources/Assets",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
 
         .executableTarget(
             name: "DeckRPG",
-            dependencies: ["Modules"],
+            dependencies: ["Core", "Platform", "Audio", "Graphics", "Assets"],
             path: "Sources/Runtime",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))

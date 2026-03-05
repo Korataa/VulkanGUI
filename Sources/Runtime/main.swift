@@ -7,8 +7,10 @@ let cameraTarget = Vector3(0.0, 0.0, 0.0)
 import CSDL3
 import Foundation
 
-import Modules
-
+import Core
+import Platform
+import Graphics
+import Assets
 var quit: Bool = false
 
 //------------------------------SDLCONTEXT INITIALIZE BECASUE EVERYTHING RELIES ON IT--------------------------------
