@@ -1,5 +1,7 @@
 import Platform
 import Core
+import Math
+
 public struct Quad {
     public var position: Vector2
     public var size: Vector2

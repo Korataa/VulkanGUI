@@ -1,5 +1,7 @@
 import Platform
 import Core
+import Math
+
     // Helper to atomically take and nil out a noncopyable property
     private func take<T>(_ value: inout T?) -> T? {
         let temp = value

@@ -1,5 +1,7 @@
 import Platform
 import Core
+import Math
+
 public protocol Shader: Resource {
     //Load compiled Spir-V shaders
     func load(vertexPath: String, fragmentPath: String) throws

@@ -1,5 +1,6 @@
 import Platform
 import Core
+import Math
 import Foundation
 
 /// ModelUI - UI models in screen space (mirrors Model3D architecture)

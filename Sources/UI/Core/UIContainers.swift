@@ -1,6 +1,6 @@
 import Core
+import Math
 import Graphics
-import Core
 // UI Layout Containers and Convenience Functions
 
 import Foundation
@@ -33,52 +33,52 @@ public struct UIBuilder {
 
 /// Vertical stack layout container
 public func Column(spacing: Float = 8, @UIBuilder content: () -> [Element]) -> Element {
-    return Element(type: .container, children: content())
-        .layoutType(.flex(direction: .column, justify: .start, align: .stretch))
+    return Element(type: ElementType.container, children: content())
+        .layoutType(LayoutType.flex(direction: FlexDirection.column, justify: JustifyContent.start, align: AlignItems.stretch))
         .spacing(spacing)
 }
 
 /// Horizontal stack layout container
 public func Row(spacing: Float = 8, @UIBuilder content: () -> [Element]) -> Element {
-    return Element(type: .container, children: content())
-        .layoutType(.flex(direction: .row, justify: .start, align: .center))
+    return Element(type: ElementType.container, children: content())
+        .layoutType(LayoutType.flex(direction: FlexDirection.row, justify: JustifyContent.start, align: AlignItems.center))
         .spacing(spacing)
 }
 
 /// Layered/overlapping layout container (z-index based)
 public func Stack(@UIBuilder content: () -> [Element]) -> Element {
-    return Element(type: .container, children: content())
-        .layoutType(.absolute(position: Vector2(0, 0)))
+    return Element(type: ElementType.container, children: content())
+        .layoutType(LayoutType.absolute(position: Vector2(0, 0)))
 }
 
 /// Empty Column container for explicit API
 public func Column() -> Element {
-    return Element(type: .container)
-        .layoutType(.flex(direction: .column, justify: .start, align: .stretch))
+    return Element(type: ElementType.container)
+        .layoutType(LayoutType.flex(direction: FlexDirection.column, justify: JustifyContent.start, align: AlignItems.stretch))
 }
 
 /// Empty Row container for explicit API
 public func Row() -> Element {
-    return Element(type: .container)
-        .layoutType(.flex(direction: .row, justify: .start, align: .center))
+    return Element(type: ElementType.container)
+        .layoutType(LayoutType.flex(direction: FlexDirection.row, justify: JustifyContent.start, align: AlignItems.center))
 }
 
 /// Empty Stack container for explicit API
 public func Stack() -> Element {
-    return Element(type: .container)
-        .layoutType(.absolute(position: Vector2(0, 0)))
+    return Element(type: ElementType.container)
+        .layoutType(LayoutType.absolute(position: Vector2(0, 0)))
 }
 
 // MARK: - Content Elements
 
 /// Text display element
 public func Text(_ content: String = "") -> Element {
-    return Element(type: .text(content: content, font: Font.system(size: 14)))
+    return Element(type: ElementType.text(content: content, font: Font.system(size: 14)))
 }
 
 /// Interactive button element
 public func Button(_ title: String, action: (() -> Void)? = nil) -> Element {
-    let element = Element(type: .text(content: title, font: Font.system(size: 14)))
+    let element = Element(type: ElementType.text(content: title, font: Font.system(size: 14)))
     
     if let action = action {
         return element.onTap(action)
@@ -89,15 +89,15 @@ public func Button(_ title: String, action: (() -> Void)? = nil) -> Element {
 
 /// Empty button for explicit API
 public func Button() -> Element {
-    return Element(type: .text(content: "", font: Font.system(size: 14)))
+    return Element(type: ElementType.text(content: "", font: Font.system(size: 14)))
 }
 
 // MARK: - Layout Helpers
 
 /// Flexible spacing element that grows to fill available space
 public func Spacer() -> Element {
-    return Element(type: .container)
-        .layoutType(.flex(direction: .column, justify: .start, align: .stretch))
+    return Element(type: ElementType.container)
+        .layoutType(LayoutType.flex(direction: FlexDirection.column, justify: JustifyContent.start, align: AlignItems.stretch))
 }
 
 // MARK: - Extension for content setting (explicit API)

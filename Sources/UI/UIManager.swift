@@ -1,5 +1,7 @@
 import Core
+import Math
 import Graphics
+
 public class UIManager {
     private let graphics: Graphics
     private var rootElement: Element?

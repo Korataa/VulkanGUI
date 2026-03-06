@@ -1,4 +1,5 @@
 import Core
+import Math
 import Graphics
 // TODO: UI System Integration with Graphics Module
 // 

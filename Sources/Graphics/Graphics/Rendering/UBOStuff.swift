@@ -1,5 +1,7 @@
 import Platform
 import Core
+import Math
+
 struct FrameConstants {
     var viewMatrix: Matrix4x4      // mat4 view
     var projectionMatrix: Matrix4x4 // mat4 proj

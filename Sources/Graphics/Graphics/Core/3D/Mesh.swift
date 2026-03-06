@@ -1,5 +1,6 @@
 import Platform
 import Core
+import Math
 import Cgltf
 import Cvma
 import Cvulkan
