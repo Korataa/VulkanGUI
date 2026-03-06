@@ -1,3 +1,5 @@
+import Math
+
 public class Camera {
     public var position: Vector3
     public var target: Vector3

@@ -1,4 +1,5 @@
-import Platform
+import Core
+import Graphics
 import Core
 //Simple styling system for ui elements
 //Start basic, expand as needed

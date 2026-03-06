@@ -1,5 +1,5 @@
-import Platform
 import Core
+import Graphics
 public class UIManager {
     private let graphics: Graphics
     private var rootElement: Element?

@@ -8,9 +8,11 @@ import CSDL3
 import Foundation
 
 import Core
+import Math
 import Platform
 import Graphics
 import Assets
+import UI
 var quit: Bool = false
 
 //------------------------------SDLCONTEXT INITIALIZE BECASUE EVERYTHING RELIES ON IT--------------------------------

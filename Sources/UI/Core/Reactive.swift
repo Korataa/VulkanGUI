@@ -1,4 +1,5 @@
-import Platform
+import Core
+import Graphics
 import Core
 // Reactive State Management for UI System
 

@@ -1,5 +1,5 @@
-import Platform
 import Core
+import Graphics
 // TODO: UI System Integration with Graphics Module
 // 
 // Current approach: Element generates vertices directly

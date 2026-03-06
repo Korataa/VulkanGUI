@@ -72,6 +72,10 @@ let package = Package(
             sources: ["stb_image.c"],
             publicHeadersPath: "."
         ),
+        .systemLibrary(
+            name: "Cstb_truetype",
+            path: "Sources/ThirdParty/Cstb_truetype"
+        ),
         .target(
             name: "Cvma",
             dependencies: ["Cvulkan"],
@@ -82,8 +86,16 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Core",
+            name: "Math",
             dependencies: [],
+            path: "Sources/Math",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
+        .target(
+            name: "Core",
+            dependencies: ["Math"],
             path: "Sources/Core",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
@@ -99,7 +111,7 @@ let package = Package(
         ),
         .target(
             name: "Platform",
-            dependencies: ["Core", "CSDL3", "Cvulkan"],
+            dependencies: ["Core", "Math", "CSDL3", "Cvulkan"],
             path: "Sources/Platform",
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
@@ -113,7 +125,7 @@ let package = Package(
         ),
         .target(
             name: "Graphics",
-            dependencies: ["Core", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image"],
+            dependencies: ["Core", "Math", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image", "Cstb_truetype"],
             path: "Sources/Graphics",
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
@@ -127,8 +139,16 @@ let package = Package(
         ),
         .target(
             name: "Assets",
-            dependencies: ["Core", "Graphics", "Cgltf", "Cstb_image"],
+            dependencies: ["Core", "Math", "Graphics", "Cgltf", "Cstb_image"],
             path: "Sources/Assets",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
+        .target(
+            name: "UI",
+            dependencies: ["Core", "Math", "Graphics"],
+            path: "Sources/UI",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
@@ -136,7 +156,7 @@ let package = Package(
 
         .executableTarget(
             name: "DeckRPG",
-            dependencies: ["Core", "Platform", "Audio", "Graphics", "Assets"],
+            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI"],
             path: "Sources/Runtime",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))

@@ -1,3 +1,5 @@
+import Math
+
 public struct Light {
     public var direction: Vector3
     public var color: Color
