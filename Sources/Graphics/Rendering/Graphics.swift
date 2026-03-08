@@ -33,6 +33,8 @@ public class Graphics {
     private var sdlContext: SDLContext
 
     var graphicsResourceManager: VulkanResourceManager?
+
+    public var renderSettings: RenderSettings()
     
     // Public accessor for the resource manager
     public var resourceManager: VulkanResourceManager {

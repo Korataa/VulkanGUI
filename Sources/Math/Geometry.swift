@@ -6,6 +6,43 @@ public struct Frustum {
     public init(planes: [Vector4] = []) {
         self.planes = planes
     }
+    
+    /// Test if a bounding box intersects with this frustum
+    public func intersects(_ boundingBox: BoundingBox) -> Bool {
+        // For each plane, check if the bounding box is completely on the outside
+        for plane in planes {
+            let normal = Vector3(plane.x, plane.y, plane.z)
+            let distance = plane.w
+            
+            // Find the "positive vertex" (vertex of the box closest to the plane)
+            let positiveVertex = Vector3(
+                normal.x >= 0 ? boundingBox.max.x : boundingBox.min.x,
+                normal.y >= 0 ? boundingBox.max.y : boundingBox.min.y,
+                normal.z >= 0 ? boundingBox.max.z : boundingBox.min.z
+            )
+            
+            // If the positive vertex is outside this plane, the whole box is outside
+            if normal.dot(other: positiveVertex) + distance < 0 {
+                return false
+            }
+        }
+        
+        return true // Box intersects or is inside the frustum
+    }
+    
+    /// Test if a point is inside this frustum
+    public func contains(_ point: Vector3) -> Bool {
+        for plane in planes {
+            let normal = Vector3(plane.x, plane.y, plane.z)
+            let distance = plane.w
+            
+            if normal.dot(other: point) + distance < 0 {
+                return false
+            }
+        }
+        
+        return true
+    }
 }
 
 //internal cross product for SIMD3 type

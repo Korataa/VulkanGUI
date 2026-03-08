@@ -1,5 +1,6 @@
 import Graphics
 import Core
+import Math
 import Cgltf
 import Cstb_image
 

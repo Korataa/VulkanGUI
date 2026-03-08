@@ -45,11 +45,6 @@ let package = Package(
         )
     ],
     targets: [
-        /*.target(name: "Platform", dependencies: ["CSDL3"]),
-        .target(name: "Renderer", dependencies: ["Platform"]),
-        .target(name: "Core", dependencies: ["Platform", "Renderer"]),
-        .target(name: "Math", dependencies: []),*/      
-
         .systemLibrary(
             name: "CSDL3",
             path: "Sources/ThirdParty/CSDL3"
@@ -147,7 +142,7 @@ let package = Package(
         ),
         .target(
             name: "UI",
-            dependencies: ["Core", "Math", "Graphics"],
+            dependencies: ["Core", "Math", "Graphics", "Cstb_truetype", "Cstb_image"],
             path: "Sources/UI",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
