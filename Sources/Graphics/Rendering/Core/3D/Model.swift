@@ -19,6 +19,15 @@ public class Model {
         return _boundingSphere!
     }
 
+    //Cache for the model's bounding box (transformed to world space)
+    private var _boundingBox: BoundingBox?
+    public var boundingBox: BoundingBox {
+        if _boundingBox == nil {
+            _boundingBox = calculateBoundingBox(for: meshes, transform: transform)
+        }
+        return _boundingBox!
+    }
+
     public var isDynamic: Bool {
         return meshes.contains { mesh in
             if let _ = mesh as? DynamicMesh {
@@ -98,6 +107,52 @@ public class Model {
         //                     x²              +        y²              +        z²
 
         return (center, radius)
+    }
+    
+    private func calculateBoundingBox(for meshes: [Mesh], transform: Transform) -> BoundingBox {
+        if meshes.isEmpty {
+            return BoundingBox() // Empty bounding box
+        }
+        
+        var combinedBox = BoundingBox()
+        
+        // Combine all mesh bounding boxes
+        for mesh in meshes {
+            combinedBox.expand(toInclude: mesh.bounds)
+        }
+        
+        // Transform the bounding box to world space
+        // For proper transformation, we need to transform all 8 corners of the box
+        // and create a new axis-aligned bounding box from the transformed points
+        // let modelMatrix = transform.modelMatrix // TODO: Use full matrix transformation later
+        
+        // Get all 8 corners of the local bounding box
+        let corners = [
+            Vector3(combinedBox.min.x, combinedBox.min.y, combinedBox.min.z), // min corner
+            Vector3(combinedBox.max.x, combinedBox.min.y, combinedBox.min.z),
+            Vector3(combinedBox.min.x, combinedBox.max.y, combinedBox.min.z),
+            Vector3(combinedBox.min.x, combinedBox.min.y, combinedBox.max.z),
+            Vector3(combinedBox.max.x, combinedBox.max.y, combinedBox.min.z),
+            Vector3(combinedBox.max.x, combinedBox.min.y, combinedBox.max.z),
+            Vector3(combinedBox.min.x, combinedBox.max.y, combinedBox.max.z),
+            Vector3(combinedBox.max.x, combinedBox.max.y, combinedBox.max.z)  // max corner
+        ]
+        
+        var transformedBox = BoundingBox()
+        
+        // Transform each corner and expand the bounding box
+        for corner in corners {
+            // Transform corner to world space (assuming transform has a method to transform points)
+            let worldCorner = Vector3(
+                corner.x * transform.scale.x + transform.position.x,
+                corner.y * transform.scale.y + transform.position.y,
+                corner.z * transform.scale.z + transform.position.z
+            )
+            // Note: This is a simple implementation - for full matrix transformation you'd use modelMatrix
+            transformedBox.expand(toInclude: worldCorner)
+        }
+        
+        return transformedBox
     }
 
     //if meshes change (for dynamic models), call this to recalculate

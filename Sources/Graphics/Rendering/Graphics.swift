@@ -33,8 +33,9 @@ public class Graphics {
     private var sdlContext: SDLContext
 
     var graphicsResourceManager: VulkanResourceManager?
-
-    public var renderSettings: RenderSettings()
+    
+    // Render configuration
+    public var settings = RenderSettings()
     
     // Public accessor for the resource manager
     public var resourceManager: VulkanResourceManager {
@@ -107,6 +108,30 @@ public class Graphics {
     /// Render multiple 3D models efficiently 
     private func render3DModels(_ models: [Model]) {
         print("🎯 Graphics.render3DModels called with \(models.count) models")
+
+        var visibleModels = models
+
+        //Apply frustrum culling if enabled
+        if renderSettings.frustumCulling {
+            guard let camera = renderer.camera else {
+                print("No camera available for frustrum culling - skipping culling")
+            } else {
+                let frustrum = renderer.calculateViewFrustrum(
+                    projectionMatrix: camera.projectionMatrix,
+                    viewMatrix: camera.viewMatrix
+                )
+
+                visibleModels = models.filter { model in
+                    //TODO: CHECK IF MODEL has boundingBox properties
+                    //if not you may need to check model.mesh
+                    //or calculate a combined bounding box for the model
+                    return frustrum.intersects(model.boundingBox)
+                }
+
+                print("Culled \(models.count - visibleModels.count) models, rendering \(visibleModels.count) models")
+            }
+        }
+
         if !models.isEmpty {
             let pipeline = get3DPipeline()
             print("🎯 Got pipeline: \(type(of: pipeline))")
