@@ -9,6 +9,7 @@ public enum PipelineType {
     case PostProcessing
     case Compute
     case UI
+    case UITextSDF
 }
 
 //High level pipeline descriptor - no api specific details needed
@@ -151,6 +152,8 @@ final class VulkanPipelineImpl: Pipeline {
             return ("shader2d_vert.spv", "shader2d_frag.spv")
         case .UI:
             return ("ui_vert.spv", "ui_frag.spv")
+        case .UITextSDF:
+            return ("ui_vert.spv", "ui_sdf.spv")
         case .PostProcessing, .Compute:
             fatalError("PostProcessing and Compute pipelines not implemented yet")
         }
@@ -160,7 +163,7 @@ final class VulkanPipelineImpl: Pipeline {
         switch type {
         case .Graphics3D:
             return "Vertex3D"
-        case .Graphics2D, .UI:
+        case .Graphics2D, .UI, .UITextSDF:
             return "Vertex2D"
         case .PostProcessing, .Compute:
             fatalError("PostProcessing and Compute pipelines not implemented yet")
@@ -173,7 +176,7 @@ final class VulkanPipelineImpl: Pipeline {
             return [vulkanRenderer.frameSetLayout, vulkanRenderer.transformSetLayout, vulkanRenderer.materialSetLayout3D]
         case .Graphics2D:
             return [vulkanRenderer.transform2DSetLayout, vulkanRenderer.material2DSetLayout]
-        case .UI:
+        case .UI, .UITextSDF:
             return [vulkanRenderer.uiProjectionSetLayout, vulkanRenderer.uiMaterialSetLayout]
         case .PostProcessing:
             return [vulkanRenderer.postProcessingSetLayout]
@@ -218,7 +221,7 @@ final class VulkanPipelineImpl: Pipeline {
         case .Graphics2D:
             frameDescriptorSet = vulkanRenderer.frameDescriptorSet
             materialDescriptorSet = vulkanRenderer.materialDescriptorSet
-        case .UI:
+        case .UI, .UITextSDF:
             frameDescriptorSet = vulkanRenderer.uiProjectionDescriptorSet
             materialDescriptorSet = vulkanRenderer.uiMaterialDescriptorSet
         case .PostProcessing:
@@ -257,7 +260,7 @@ final class VulkanPipelineImpl: Pipeline {
             } else {
                 print("❌ No material descriptor set available!")
             }
-        case .Graphics2D, .UI:
+        case .Graphics2D, .UI, .UITextSDF:
             // For 2D/UI, bind all sets together since they don't need per-model dynamic offsets
             var descriptorSets: [VkDescriptorSet] = []
             if let frameSet = frameDescriptorSet { descriptorSets.append(frameSet) }

@@ -111,7 +111,7 @@ public extension Element {
                     color: color,
                     textureID: textureID
                 ))
-            case .text(let content, let font):
+            case .text(_, _):
                 //Text rendering would be more complex -might generate multiple quads
                 //for now use a placeholder
                 break

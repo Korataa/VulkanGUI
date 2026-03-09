@@ -49,8 +49,15 @@ struct UIProjectionConstants {
 struct UIMaterialConstants {
     var tint: Color            // Color tint/multiplier (vec4 in shader)
     var opacity: Float         // Global opacity
-    var textureMode: Int32     // 0=solid, 1=texture, 2=texture+color blend
+    var textureMode: Int32     // 0=solid, 1=texture, 2=texture+color blend, 3=SDF
     var roundedCorners: Int32  // Enable rounded corner rendering
     var cornerRadius: Float    // Corner radius in pixels
-    var padding: Vector3       // Alignment padding
+    var sdfThreshold: Float    // SDF cutoff threshold (default 0.5)
+    var outlineWidth: Float    // Outline thickness (default 0.0)
+    var pad0: Float            // std140 alignment before outlineColor
+    var outlineColor: Color    // Outline color
+    var sdfRange: Float        // Distance field range (default 4.0)
+    var reserved1: Float       // Reserved for future use
+    var reserved2: Float       // Reserved for future use
+    var pad1: Float            // Struct size alignment padding
 }

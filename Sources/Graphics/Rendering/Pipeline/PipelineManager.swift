@@ -25,6 +25,17 @@ class PipelineManager {
         return newPipeline
     }
 
+    /// Convenience helper for the unified UI SDF pipeline variant.
+    func createOrGetUISDFPipeline(device: Any? = nil) -> Pipeline {
+        let descriptor = PipelineDescriptor(
+            type: .UITextSDF,
+            blendMode: .Alpha,
+            depthTest: false,
+            cullMode: .None
+        )
+        return createOrGetPipeline(desc: descriptor, device: device)
+    }
+
     func switchBackend(_ newBackend: GraphicsBackend) {
         // Clean up existing pipelines
         cleanupAllPipelines()

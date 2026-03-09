@@ -2043,7 +2043,14 @@ same here 0       1
             textureMode: 0,          // Solid color mode (no texture)
             roundedCorners: 0,       // No rounded corners
             cornerRadius: 0.0,       // No corner radius
-            padding: Vector3(0, 0, 0) // Padding
+            sdfThreshold: 0.5,
+            outlineWidth: 0.0,
+            pad0: 0.0,
+            outlineColor: Color.black,
+            sdfRange: 4.0,
+            reserved1: 0.0,
+            reserved2: 0.0,
+            pad1: 0.0
         )
         
         // For now, we'll use push constants or skip material UBO since we don't have one allocated

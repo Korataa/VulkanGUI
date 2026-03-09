@@ -58,7 +58,11 @@ let package = Package(
             dependencies: [],
             path: "Sources/ThirdParty/Cgltf",
             sources: ["cgltf.c", "cgltf.h"],
-            publicHeadersPath: "."
+            publicHeadersPath: ".",
+            cSettings: [
+                // Third-party library: silence CRT deprecation spam on Windows.
+                .define("_CRT_SECURE_NO_WARNINGS", .when(platforms: [.windows]))
+            ]
         ),
         .target(
             name: "Cstb_image",
@@ -77,7 +81,7 @@ let package = Package(
             path: "Sources/ThirdParty/Cvma",
             publicHeadersPath: "include",
             cxxSettings: [
-                .unsafeFlags(unsafeIncludeFlags)
+                .unsafeFlags(unsafeIncludeFlags + ["-Wno-nullability-completeness"])
             ]
         ),
         .target(

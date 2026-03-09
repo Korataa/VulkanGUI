@@ -2,6 +2,46 @@ import Platform
 import Core
 import Foundation
 
+public struct UIMaterialUniforms {
+    public var tint: Color
+    public var opacity: Float
+    public var textureMode: Int32
+    public var roundedCorners: Int32
+    public var cornerRadius: Float
+    public var sdfThreshold: Float
+    public var outlineWidth: Float
+    public var outlineColor: Color
+    public var sdfRange: Float
+    public var reserved1: Float
+    public var reserved2: Float
+
+    public init(
+        tint: Color = .white,
+        opacity: Float = 1.0,
+        textureMode: Int32 = 0,
+        roundedCorners: Int32 = 0,
+        cornerRadius: Float = 0.0,
+        sdfThreshold: Float = 0.5,
+        outlineWidth: Float = 0.0,
+        outlineColor: Color = .black,
+        sdfRange: Float = 4.0,
+        reserved1: Float = 0.0,
+        reserved2: Float = 0.0
+    ) {
+        self.tint = tint
+        self.opacity = opacity
+        self.textureMode = textureMode
+        self.roundedCorners = roundedCorners
+        self.cornerRadius = cornerRadius
+        self.sdfThreshold = sdfThreshold
+        self.outlineWidth = outlineWidth
+        self.outlineColor = outlineColor
+        self.sdfRange = sdfRange
+        self.reserved1 = reserved1
+        self.reserved2 = reserved2
+    }
+}
+
 public enum MaterialType: Hashable {
     case PBR
     case Unlit

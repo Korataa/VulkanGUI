@@ -56,7 +56,7 @@ public extension Element {
         }
         
         // Subscribe to updates (in a real implementation, we'd need weak references to avoid retain cycles)
-        reactive.observe { [element] newValue in
+        reactive.observe { newValue in
             let newText = transform(newValue)
             // In a full implementation, this would trigger a UI update
             // For now, we'll implement the update mechanism later
