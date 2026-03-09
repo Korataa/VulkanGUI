@@ -2456,7 +2456,7 @@ same here 0       1
 
     // TODO: VulkanRenderer is a low-level graphics API wrapper and shouldn't know about high-level concepts like Frustum.
     // This frustum culling logic should be moved to a higher-level rendering system or scene manager.
-    private func calculateViewFrustum(projectionMatrix: Matrix4x4, viewMatrix: Matrix4x4) -> Frustum {
+    public func calculateViewFrustum(projectionMatrix: Matrix4x4, viewMatrix: Matrix4x4) -> Frustum {
         let pvMatrix = projectionMatrix * viewMatrix
 
         //Extract frustum planes from the combined projection-view matrix

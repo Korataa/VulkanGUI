@@ -35,6 +35,11 @@ let eventManager = EventManager(sdlContext)
 let graphics = Graphics(sdlContext: sdlContext)
 graphics.initialize()
 
+// Configure render settings for frustum culling
+print("🎯 Enabling frustum culling...")
+graphics.settings = .performance  // Enable frustum culling
+// graphics.settings.debugCulling = true  // Uncomment to see culling stats
+
 // Test our new pipeline architecture
 graphics.testPipelineCreation()
 
