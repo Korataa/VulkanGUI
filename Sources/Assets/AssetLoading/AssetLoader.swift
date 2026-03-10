@@ -1,4 +1,4 @@
-import Graphics
+﻿import Graphics
 import Core
 import Math
 import Cgltf
@@ -58,21 +58,16 @@ public class AssetLoader {
 
         // --- 3. Load textures ---
         var textureStorage = TextureStorage()
-        print("DEBUG: Loading \(dataVal.images_count) images/textures")
         for i in 0..<dataVal.images_count {
             let image = dataVal.images[i]
-            print("DEBUG: Loading image \(i) - URI: \(image.uri != nil ? String(cString: image.uri!) : "embedded")")
             if let imageData = loadImageData(from: image, basePath: basePath) {
                 let (pixels, width, height, channels) = decodeImage(imageData)
                 var texture = Texture(width: Int(width), height: Int(height), channels: Int(channels), pixels: pixels)
-                print("DEBUG: Decoded image \(i): \(width)x\(height), \(channels) channels")
                 
                 // Register texture with resource manager and get ID using explicit move
                 let textureId = resourceManager.addTexture(consume texture)
                 textureStorage.addTextureId(textureId, width: Int(width), height: Int(height), channels: Int(channels))
-                print("DEBUG: Registered texture \(i) with ID: \(textureId)")
             } else {
-                print("DEBUG: Failed to load image \(i)")
             }
         }
 
@@ -84,16 +79,12 @@ public class AssetLoader {
 
             //Fill in pbr properties
             let pbr = mat.pbr_metallic_roughness
-            print("DEBUG: Material \(i) GLTF base_color_factor: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
             
             // Check if this GLTF uses specular glossiness extension
-            print("DEBUG: Material \(i) has extensions: \(mat.extensions != nil ? "YES" : "NO")")
-            print("DEBUG: Material \(i) has_pbr_specular_glossiness: \(mat.has_pbr_specular_glossiness != 0 ? "YES" : "NO")")
             
             // Use specular-glossiness extension if available (which contains the real colors)
             if mat.has_pbr_specular_glossiness != 0 {
                 let specGloss = mat.pbr_specular_glossiness
-                print("DEBUG: Material \(i) specular-glossiness diffuse_factor: (\(specGloss.diffuse_factor.0), \(specGloss.diffuse_factor.1), \(specGloss.diffuse_factor.2), \(specGloss.diffuse_factor.3))")
                 
                 // Use the diffuse_factor from specular-glossiness extension (this is the actual color)
                 material.baseColor = Color(
@@ -109,7 +100,6 @@ public class AssetLoader {
                 let specularIntensity = (specGloss.specular_factor.0 + specGloss.specular_factor.1 + specGloss.specular_factor.2) / 3.0
                 material.metallicFactor = specularIntensity
                 
-                print("DEBUG: Material \(i) using specular-glossiness color: (\(specGloss.diffuse_factor.0), \(specGloss.diffuse_factor.1), \(specGloss.diffuse_factor.2), \(specGloss.diffuse_factor.3))")
             } else {
                 // Fallback to standard PBR
                 material.baseColor = Color(
@@ -120,7 +110,6 @@ public class AssetLoader {
                 )
                 material.metallicFactor = pbr.metallic_factor
                 material.roughnessFactor = pbr.roughness_factor
-                print("DEBUG: Material \(i) using standard PBR color: (\(pbr.base_color_factor.0), \(pbr.base_color_factor.1), \(pbr.base_color_factor.2), \(pbr.base_color_factor.3))")
             }
 
             //Add textures - check specular-glossiness extension first
@@ -129,10 +118,8 @@ public class AssetLoader {
                 let diffuseTex = mat.pbr_specular_glossiness.diffuse_texture
                 if let texPtr = diffuseTex.texture, let basePtr = dataVal.textures {
                     material.baseColorTextureIndex = texPtr - basePtr
-                    print("DEBUG: Material \(i) has specular-glossiness diffuse texture index: \(material.baseColorTextureIndex)")
                 } else {
                     material.baseColorTextureIndex = -1
-                    print("DEBUG: Material \(i) has NO specular-glossiness diffuse texture")
                 }
                 
                 // Use specular-glossiness texture for metallic-roughness
@@ -147,10 +134,8 @@ public class AssetLoader {
                 let baseColorTex = mat.pbr_metallic_roughness.base_color_texture
                 if let texPtr = baseColorTex.texture, let basePtr = dataVal.textures {
                     material.baseColorTextureIndex = texPtr - basePtr
-                    print("DEBUG: Material \(i) has base color texture index: \(String(describing: material.baseColorTextureIndex))")
                 } else {
                     material.baseColorTextureIndex = -1
-                    print("DEBUG: Material \(i) has NO base color texture")
                 }
 
                 //similar for other textures
@@ -185,13 +170,11 @@ public class AssetLoader {
                 if baseColorFactor.0 == 0.0 && baseColorFactor.1 == 0.0 && baseColorFactor.2 == 0.0 {
                     // This material has no texture and black base color - give it a reasonable default
                     material.baseColor = Color(200, 200, 200, 255)  // Light gray
-                    print("DEBUG: Fixed material \(i) with black base color and no texture - setting to light gray")
                 }
             }
             
             // TEMPORARY DEBUG: Make ALL materials bright white to test visibility
             material.baseColor = Color(255, 255, 255, 255)  // Force white
-            print("DEBUG: FORCING material \(i) to bright white for visibility test")
 
             materials.append(material)
         }
@@ -262,7 +245,6 @@ public class AssetLoader {
                         continue
                     }
                     if attr.type == cgltf_attribute_type_position {
-                        print("DEBUG: Loading POSITION data - count: \(count), stride: \(stride), offset: \(offset)")
                         let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
                             let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
@@ -270,10 +252,8 @@ public class AssetLoader {
                             positions.append(pos)
                             // Print first few positions for debugging
                             if v < 5 {
-                                print("DEBUG: Vertex \(v) position: (\(pos.x), \(pos.y), \(pos.z))")
                             }
                         }
-                        print("DEBUG: Loaded \(positions.count) positions")
                     } else if attr.type == cgltf_attribute_type_normal {
                         let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
                         for v in 0..<count {
@@ -296,8 +276,6 @@ public class AssetLoader {
                 var minBounds = Vector3(Float.infinity, Float.infinity, Float.infinity)
                 var maxBounds = Vector3(-Float.infinity, -Float.infinity, -Float.infinity)
                 
-                print("DEBUG: Creating \(positions.count) vertices for mesh \(i), primitive \(j)")
-                print("DEBUG: Available data - positions: \(positions.count), normals: \(normals.count), texCoords: \(texCoords.count)")
                 
                 for v in 0..<positions.count {
                     let pos = positions[v]
@@ -321,7 +299,6 @@ public class AssetLoader {
                     )
                 }
 
-                print("DEBUG: Mesh \(i) primitive \(j) bounds: min(\(minBounds.x), \(minBounds.y), \(minBounds.z)) to max(\(maxBounds.x), \(maxBounds.y), \(maxBounds.z))")
 
                 // --- Extract indices ---
                 var indices: [UInt32] = []
@@ -337,16 +314,13 @@ public class AssetLoader {
                             for i in 0..<indexCount {
                                 indices.append(UInt32(basePtr[i]))
                             }
-                            print("DEBUG: Using 16-bit indices, first few indices: \(indices.prefix(6))")
                         } else if indexType == cgltf_component_type_r_32u {
                             let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
                             for i in 0..<indexCount {
                                 indices.append(basePtr[i])
                             }
-                            print("DEBUG: Using 32-bit indices, first few indices: \(indices.prefix(6))")
                         }
                         
-                        print("DEBUG: Loaded \(indices.count) indices")
                 }
 
                 // --- Upload to buffers and create mesh descriptor ---
@@ -355,8 +329,6 @@ public class AssetLoader {
                     let vertexRegion = try resourceManager.allocateStaticVertices(vertices: vertices)
                     let indexRegion = try resourceManager.allocateIndices(indices: indices)
                 
-                    print("DEBUG: Mesh \(i).\(j) - Loading \(vertices.count) vertices and \(indices.count) indices")
-                    print("DEBUG: Vertex region offset: \(vertexRegion.offset), Index region offset: \(indexRegion.offset)")
                     
                     // Check for out-of-bounds indices
                     let maxIndex = indices.max() ?? 0
