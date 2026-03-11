@@ -10,10 +10,12 @@ public struct UIMaterialUniforms {
     public var cornerRadius: Float
     public var sdfThreshold: Float
     public var outlineWidth: Float
+    public var pad0: Float // std140 alignment before outlineColor
     public var outlineColor: Color
     public var sdfRange: Float
     public var reserved1: Float
     public var reserved2: Float
+    public var pad1: Float // struct size alignment padding
 
     public init(
         tint: Color = .white,
@@ -26,7 +28,9 @@ public struct UIMaterialUniforms {
         outlineColor: Color = .black,
         sdfRange: Float = 4.0,
         reserved1: Float = 0.0,
-        reserved2: Float = 0.0
+        reserved2: Float = 0.0,
+        pad0: Float = 0.0,
+        pad1: Float = 0.0
     ) {
         self.tint = tint
         self.opacity = opacity
@@ -35,10 +39,12 @@ public struct UIMaterialUniforms {
         self.cornerRadius = cornerRadius
         self.sdfThreshold = sdfThreshold
         self.outlineWidth = outlineWidth
+        self.pad0 = pad0
         self.outlineColor = outlineColor
         self.sdfRange = sdfRange
         self.reserved1 = reserved1
         self.reserved2 = reserved2
+        self.pad1 = pad1
     }
 }
 

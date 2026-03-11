@@ -26,11 +26,11 @@ layout(set = 1, binding = 0) uniform UIMaterial {
 layout(set = 1, binding = 1) uniform sampler2D uiTexture;
 
 void main() {
-    // For debugging: use vertex color directly, ignore material tint
     vec4 color = vertexColor;
-    
+
     switch(uiMaterial.textureMode) {
-        case 0: // Solid color only
+        case 0: // Solid color only (use tint for text and rectangles)
+            color = uiMaterial.tint;
             break;
         case 1: // Texture only
             color = texture(uiTexture, texCoords) * uiMaterial.tint;
@@ -38,12 +38,18 @@ void main() {
         case 2: // Texture * vertex color * tint
             color = texture(uiTexture, texCoords) * vertexColor * uiMaterial.tint;
             break;
+        case 3: // SDF text rendering
+            float sdf = texture(uiTexture, texCoords).r;
+            float alpha = smoothstep(uiMaterial.sdfThreshold - uiMaterial.sdfRange, uiMaterial.sdfThreshold + uiMaterial.sdfRange, sdf);
+            color = uiMaterial.tint;
+            color.a *= alpha;
+            break;
     }
-    
+
     // Apply global opacity
     color.a *= uiMaterial.opacity;
-    
+
     // TODO: Add rounded corner logic here if needed
-    
+
     outColor = color;
 }

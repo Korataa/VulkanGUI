@@ -73,6 +73,7 @@ public func Stack() -> Element {
 
 /// Text display element
 public func Text(_ content: String = "") -> Element {
+    print("[UI DEBUG] Text() called with content: \(content)")
     return Element(type: ElementType.text(content: content, font: Font.system(size: 14)))
 }
 

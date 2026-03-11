@@ -14,6 +14,7 @@ public class VulkanTextureManager {
     // Texture storage
     private var textures: [VulkanTexture] = []
     private var sampler: VkSampler?
+    private var clampSampler: VkSampler?
     
     // Descriptor set layout and pool for textures
     private var textureDescriptorSetLayout: VkDescriptorSetLayout?
@@ -32,6 +33,11 @@ public class VulkanTextureManager {
     public func initialize() -> Bool {
         guard createSampler() else {
             print("Failed to create texture sampler")
+            return false
+        }
+
+        guard createClampSampler() else {
+            print("Failed to create clamp texture sampler")
             return false
         }
         
@@ -65,6 +71,11 @@ public class VulkanTextureManager {
             vkDestroySampler(device, sampler, nil)
             self.sampler = nil
         }
+
+        if let clampSampler = clampSampler {
+            vkDestroySampler(device, clampSampler, nil)
+            self.clampSampler = nil
+        }
         
         print("VulkanTextureManager cleanup completed")
     }
@@ -80,6 +91,42 @@ public class VulkanTextureManager {
         
         textures.append(vulkanTexture)
         print("Created Vulkan texture \(textureIndex): \(textureData.width)x\(textureData.height)")
+        return textureIndex
+    }
+
+    public func createTextureRGBA(width: Int, height: Int, pixels: [UInt8], srgb: Bool = true, preferClampSampler: Bool = false) -> Int {
+        let expectedByteCount = width * height * 4
+        guard pixels.count == expectedByteCount else {
+            print("Invalid RGBA texture byte count: got \(pixels.count), expected \(expectedByteCount)")
+            return -1
+        }
+
+        let textureIndex = textures.count
+        guard let vulkanTexture = createVulkanTexture(width: width, height: height, rgbaPixels: pixels, srgb: srgb, preferClampSampler: preferClampSampler) else {
+            print("Failed to create Vulkan RGBA texture for index \(textureIndex)")
+            return -1
+        }
+
+        textures.append(vulkanTexture)
+        print("Created Vulkan RGBA texture \(textureIndex): \(width)x\(height)")
+        return textureIndex
+    }
+
+    public func createTextureR8(width: Int, height: Int, pixels: [UInt8]) -> Int {
+        let expectedByteCount = width * height
+        guard pixels.count == expectedByteCount else {
+            print("Invalid R8 texture byte count: got \(pixels.count), expected \(expectedByteCount)")
+            return -1
+        }
+
+        let textureIndex = textures.count
+        guard let vulkanTexture = createVulkanTexture(width: width, height: height, rPixels: pixels) else {
+            print("Failed to create Vulkan R8 texture for index \(textureIndex)")
+            return -1
+        }
+
+        textures.append(vulkanTexture)
+        print("Created Vulkan R8 texture \(textureIndex): \(width)x\(height)")
         return textureIndex
     }
     
@@ -121,6 +168,36 @@ public class VulkanTextureManager {
         }
         
         sampler = createdSampler
+        return true
+    }
+
+    private func createClampSampler() -> Bool {
+        var samplerInfo = VkSamplerCreateInfo()
+        samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO
+        samplerInfo.magFilter = VK_FILTER_LINEAR
+        samplerInfo.minFilter = VK_FILTER_LINEAR
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+        samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+        samplerInfo.anisotropyEnable = VK_FALSE
+        samplerInfo.maxAnisotropy = 1.0
+        samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
+        samplerInfo.unnormalizedCoordinates = VK_FALSE
+        samplerInfo.compareEnable = VK_FALSE
+        samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS
+        samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR
+        samplerInfo.mipLodBias = 0.0
+        samplerInfo.minLod = 0.0
+        samplerInfo.maxLod = 0.0
+
+        var tempSampler: VkSampler?
+        let result = vkCreateSampler(device, &samplerInfo, nil, &tempSampler)
+        guard result == VK_SUCCESS, let createdSampler = tempSampler else {
+            print("Failed to create clamp sampler: \(result)")
+            return false
+        }
+
+        clampSampler = createdSampler
         return true
     }
     
@@ -167,7 +244,8 @@ public class VulkanTextureManager {
         // Create image
         guard let vulkanTexture = createImage(width: UInt32(textureData.width), 
                                             height: UInt32(textureData.height),
-                                            format: VK_FORMAT_R8G8B8A8_SRGB) else {
+                                            format: VK_FORMAT_R8G8B8A8_SRGB,
+                                            samplerOverride: sampler) else {
             vmaDestroyBuffer(allocator, buffer, allocation)
             return nil
         }
@@ -202,8 +280,141 @@ public class VulkanTextureManager {
         
         return vulkanTexture
     }
+
+    private func createVulkanTexture(width: Int, height: Int, rgbaPixels: [UInt8], srgb: Bool, preferClampSampler: Bool) -> VulkanTexture? {
+        let imageSize = VkDeviceSize(width * height * 4)
+        let imageFormat: VkFormat = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM
+
+        var stagingBuffer: VkBuffer?
+        var stagingBufferAllocation: VmaAllocation?
+
+        var bufferInfo = VkBufferCreateInfo()
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
+        bufferInfo.size = imageSize
+        bufferInfo.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue)
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+
+        var allocInfo = VmaAllocationCreateInfo()
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY
+
+        var result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &stagingBuffer, &stagingBufferAllocation, nil)
+        guard result == VK_SUCCESS, let buffer = stagingBuffer, let allocation = stagingBufferAllocation else {
+            print("Failed to create staging buffer: \(result)")
+            return nil
+        }
+
+        var data: UnsafeMutableRawPointer?
+        result = vmaMapMemory(allocator, allocation, &data)
+        guard result == VK_SUCCESS, let mappedData = data else {
+            print("Failed to map staging buffer memory: \(result)")
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        rgbaPixels.withUnsafeBytes { src in
+            mappedData.copyMemory(from: src.baseAddress!, byteCount: Int(imageSize))
+        }
+        vmaUnmapMemory(allocator, allocation)
+
+        let selectedSampler = preferClampSampler ? (clampSampler ?? sampler) : sampler
+        guard let vulkanTexture = createImage(width: UInt32(width), height: UInt32(height), format: imageFormat, samplerOverride: selectedSampler) else {
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard transitionImageLayout(vulkanTexture.image, format: imageFormat,
+                                    oldLayout: VK_IMAGE_LAYOUT_UNDEFINED,
+                                    newLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard copyBufferToImage(buffer, vulkanTexture.image, width: UInt32(width), height: UInt32(height)) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard transitionImageLayout(vulkanTexture.image, format: imageFormat,
+                                    oldLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    newLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        vmaDestroyBuffer(allocator, buffer, allocation)
+        return vulkanTexture
+    }
+
+    private func createVulkanTexture(width: Int, height: Int, rPixels: [UInt8]) -> VulkanTexture? {
+        let imageSize = VkDeviceSize(width * height)
+        let imageFormat: VkFormat = VK_FORMAT_R8_UNORM
+
+        var stagingBuffer: VkBuffer?
+        var stagingBufferAllocation: VmaAllocation?
+
+        var bufferInfo = VkBufferCreateInfo()
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
+        bufferInfo.size = imageSize
+        bufferInfo.usage = UInt32(VK_BUFFER_USAGE_TRANSFER_SRC_BIT.rawValue)
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+
+        var allocInfo = VmaAllocationCreateInfo()
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY
+
+        var result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &stagingBuffer, &stagingBufferAllocation, nil)
+        guard result == VK_SUCCESS, let buffer = stagingBuffer, let allocation = stagingBufferAllocation else {
+            print("Failed to create staging buffer: \(result)")
+            return nil
+        }
+
+        var data: UnsafeMutableRawPointer?
+        result = vmaMapMemory(allocator, allocation, &data)
+        guard result == VK_SUCCESS, let mappedData = data else {
+            print("Failed to map staging buffer memory: \(result)")
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        rPixels.withUnsafeBytes { src in
+            mappedData.copyMemory(from: src.baseAddress!, byteCount: Int(imageSize))
+        }
+        vmaUnmapMemory(allocator, allocation)
+
+        guard let vulkanTexture = createImage(width: UInt32(width), height: UInt32(height), format: imageFormat, samplerOverride: clampSampler ?? sampler) else {
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard transitionImageLayout(vulkanTexture.image, format: imageFormat,
+                                    oldLayout: VK_IMAGE_LAYOUT_UNDEFINED,
+                                    newLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard copyBufferToImage(buffer, vulkanTexture.image, width: UInt32(width), height: UInt32(height)) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        guard transitionImageLayout(vulkanTexture.image, format: imageFormat,
+                                    oldLayout: VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    newLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) else {
+            cleanup(texture: vulkanTexture)
+            vmaDestroyBuffer(allocator, buffer, allocation)
+            return nil
+        }
+
+        vmaDestroyBuffer(allocator, buffer, allocation)
+        return vulkanTexture
+    }
     
-    private func createImage(width: UInt32, height: UInt32, format: VkFormat) -> VulkanTexture? {
+    private func createImage(width: UInt32, height: UInt32, format: VkFormat, samplerOverride: VkSampler?) -> VulkanTexture? {
         var imageInfo = VkImageCreateInfo()
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
         imageInfo.imageType = VK_IMAGE_TYPE_2D
@@ -237,7 +448,7 @@ public class VulkanTextureManager {
             return nil
         }
         
-        return VulkanTexture(image: createdImage, imageView: imageView, sampler: sampler, allocation: createdAllocation)
+        return VulkanTexture(image: createdImage, imageView: imageView, sampler: samplerOverride, allocation: createdAllocation)
     }
     
     private func createImageView(_ image: VkImage, format: VkFormat) -> VkImageView? {

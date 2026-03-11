@@ -1,0 +1,21 @@
+# UI Text Color Debugging Findings (March 11, 2026)
+
+## Summary
+- The UI DSL in main.swift sets `.textColor(.white)` and `.textColor(.black)` for the HP and Score labels, as intended.
+- The style system propagates `textColor` correctly from the DSL to the `Element` and into the rendering pipeline.
+- The `UIManager`'s renderable generation uses `element.style.textColor` for text rendering, both in the SDF and fallback paths.
+- The `Color` struct and its `.white` and `.black` definitions are correct (0–255 range, proper sRGB to linear conversion).
+- The `TextRenderer` passes the color to the vertex and renderable data as expected.
+- The `Vertex2D` struct and pipeline use a 4-float color at location 2, matching the shader input.
+- No evidence that the style is being overwritten by containers or the builder logic.
+
+## Remaining Suspicions
+- If both labels are still black, the most likely cause is in the SDF text shader or the way the color attribute is used in the shader.
+- The next step would be to check the fragment shader (ui_sdf.frag) to ensure it uses the vertex color input for text rendering.
+
+## Next Steps (for future debugging)
+1. Inspect `Assets/Shaders/ui_sdf.frag` and related shaders to confirm the color attribute is used for text output.
+2. If the shader ignores the color or always outputs black, update it to use the input color.
+3. Rebuild shaders and re-test.
+
+All code and data paths up to the shader are correct. Shader logic is the next place to check.

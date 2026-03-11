@@ -119,6 +119,26 @@ class VulkanRenderer {
     // UI projection uniform buffer
     var uiProjectionUBO: VkBuffer? = nil
     var uiProjectionUBOMemory: VmaAllocation? = nil
+    var uiMaterialUBO: VkBuffer? = nil
+    var uiMaterialUBOMemory: VmaAllocation? = nil
+
+    private var currentUIMaterial = UIMaterialConstants(
+        tint: Color.white,
+        opacity: 1.0,
+        textureMode: 0,
+        roundedCorners: 0,
+        cornerRadius: 0.0,
+        sdfThreshold: 0.5,
+        outlineWidth: 0.0,
+        pad0: 0.0,
+        outlineColor: Color.black,
+        sdfRange: 4.0,
+        reserved1: 0.0,
+        reserved2: 0.0,
+        pad1: 0.0
+    )
+    private var currentUITextureIndex: Int? = nil
+    private var uiTextUsesMSDF: Bool = false
     
     // Texture management
     var textureManager: VulkanTextureManager? = nil
@@ -302,6 +322,9 @@ same here 0       1
         // Cleanup UI projection buffer
         if let uiProjectionUBO = uiProjectionUBO, let uiProjectionUBOMemory = uiProjectionUBOMemory {
             vmaDestroyBuffer(vmaAllocator!, uiProjectionUBO, uiProjectionUBOMemory)
+        }
+        if let uiMaterialUBO = uiMaterialUBO, let uiMaterialUBOMemory = uiMaterialUBOMemory {
+            vmaDestroyBuffer(vmaAllocator!, uiMaterialUBO, uiMaterialUBOMemory)
         }
         
         // Cleanup depth resources
@@ -2031,31 +2054,154 @@ same here 0       1
     }
 
     private func updateUIMaterialDescriptorSet() {
-        guard uiMaterialDescriptorSet != nil else {
+        guard let uiMaterialDescriptorSet = uiMaterialDescriptorSet else {
             print("Warning: UI material descriptor set not allocated - skipping update")
             return
         }
 
-        // Create UI material data with proper defaults
-        let _ = UIMaterialConstants(
-            tint: Color.white,        // White tint = no color modification
-            opacity: 1.0,            // Fully opaque
-            textureMode: 0,          // Solid color mode (no texture)
-            roundedCorners: 0,       // No rounded corners
-            cornerRadius: 0.0,       // No corner radius
-            sdfThreshold: 0.5,
-            outlineWidth: 0.0,
-            pad0: 0.0,
-            outlineColor: Color.black,
-            sdfRange: 4.0,
-            reserved1: 0.0,
-            reserved2: 0.0,
-            pad1: 0.0
-        )
-        
-        // For now, we'll use push constants or skip material UBO since we don't have one allocated
-        // The key fix is ensuring the shader gets a proper tint value
-        print("Updated UI material descriptor set with white tint!")
+        guard let uiMaterialUBO = uiMaterialUBO, let uiMaterialUBOMemory = uiMaterialUBOMemory else {
+            print("Warning: UI material UBO not available - skipping update")
+            return
+        }
+
+        var material = currentUIMaterial
+        var mappedMemory: UnsafeMutableRawPointer?
+        let mapResult = vmaMapMemory(vmaAllocator!, uiMaterialUBOMemory, &mappedMemory)
+        if mapResult == VK_SUCCESS {
+            withUnsafeBytes(of: &material) { bytes in
+                mappedMemory!.copyMemory(from: bytes.baseAddress!, byteCount: MemoryLayout<UIMaterialConstants>.stride)
+            }
+            vmaUnmapMemory(vmaAllocator!, uiMaterialUBOMemory)
+        } else {
+            print("Warning: Failed to map UI material UBO")
+            return
+        }
+
+        var writes: [VkWriteDescriptorSet] = []
+        var bufferInfos: [VkDescriptorBufferInfo] = []
+        var imageInfos: [VkDescriptorImageInfo] = []
+
+        bufferInfos.append(VkDescriptorBufferInfo(
+            buffer: uiMaterialUBO,
+            offset: 0,
+            range: VkDeviceSize(MemoryLayout<UIMaterialConstants>.stride)
+        ))
+
+        var materialWrite = VkWriteDescriptorSet()
+        materialWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+        materialWrite.dstSet = uiMaterialDescriptorSet
+        materialWrite.dstBinding = 0
+        materialWrite.dstArrayElement = 0
+        materialWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+        materialWrite.descriptorCount = 1
+        writes.append(materialWrite)
+
+        if let textureManager = textureManager {
+            var selectedTexture: VulkanTexture?
+            if let textureIndex = currentUITextureIndex {
+                selectedTexture = textureManager.getVulkanTexture(at: textureIndex)
+                if selectedTexture == nil {
+                    print("Warning: UI texture index \(textureIndex) is invalid (texture count: \(textureManager.getTextureCount())). Falling back to default texture.")
+                }
+            }
+
+            if selectedTexture == nil {
+                selectedTexture = textureManager.getDefaultTexture()
+            }
+
+            if let selectedTexture = selectedTexture {
+                imageInfos.append(VkDescriptorImageInfo(
+                    sampler: selectedTexture.sampler,
+                    imageView: selectedTexture.imageView,
+                    imageLayout: VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                ))
+
+                var textureWrite = VkWriteDescriptorSet()
+                textureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET
+                textureWrite.dstSet = uiMaterialDescriptorSet
+                textureWrite.dstBinding = 1
+                textureWrite.dstArrayElement = 0
+                textureWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                textureWrite.descriptorCount = 1
+                writes.append(textureWrite)
+            } else {
+                print("Warning: No UI texture available to bind for UI material descriptor set.")
+            }
+        }
+
+        bufferInfos.withUnsafeBufferPointer { bufferPtr in
+            imageInfos.withUnsafeBufferPointer { imagePtr in
+                if !writes.isEmpty {
+                    writes[0].pBufferInfo = bufferPtr.baseAddress
+                }
+                if writes.count > 1 {
+                    writes[1].pImageInfo = imagePtr.baseAddress
+                }
+
+                writes.withUnsafeBufferPointer { writesPtr in
+                    vkUpdateDescriptorSets(logicalDevice, UInt32(writes.count), writesPtr.baseAddress, 0, nil)
+                }
+            }
+        }
+    }
+
+    func setUIMaterial(
+        textureMode: Int32,
+        textureIndex: Int?,
+        tint: Color = .white,
+        opacity: Float = 1.0,
+        sdfThreshold: Float? = nil,
+        sdfRange: Float? = nil,
+        outlineWidth: Float? = nil,
+        outlineColor: Color? = nil
+    ) {
+        currentUIMaterial.textureMode = textureMode
+        currentUIMaterial.tint = tint
+        currentUIMaterial.opacity = opacity
+        if let sdfThreshold {
+            currentUIMaterial.sdfThreshold = sdfThreshold
+        }
+        if let sdfRange {
+            currentUIMaterial.sdfRange = max(0.001, sdfRange)
+        }
+        if let outlineWidth {
+            currentUIMaterial.outlineWidth = max(0.0, outlineWidth)
+        }
+        if let outlineColor {
+            currentUIMaterial.outlineColor = outlineColor
+        }
+        currentUITextureIndex = textureIndex
+        if textureMode == 3 {
+            currentUIMaterial.reserved1 = 1.0
+            currentUIMaterial.reserved2 = uiTextUsesMSDF ? 1.0 : 0.0
+        }
+        updateUIMaterialDescriptorSet()
+    }
+
+    // Toggle between readable fallback mode (false) and true SDF reconstruction mode (true).
+    func setUITextTrueSDFMode(_ enabled: Bool) {
+        currentUIMaterial.reserved1 = enabled ? 1.0 : 0.0
+        print("UI text mode: \(enabled ? "TrueSDF" : "FallbackReadable")")
+        updateUIMaterialDescriptorSet()
+    }
+
+    func setUITextSDFStepDebugMode(_ enabled: Bool) {
+        currentUIMaterial.reserved2 = enabled ? 1.0 : 0.0
+        print("UI text SDF step-debug: \(enabled ? "ON" : "OFF")")
+        updateUIMaterialDescriptorSet()
+    }
+
+    func setUITextMSDFMode(_ enabled: Bool) {
+        uiTextUsesMSDF = enabled
+        print("UI text sampling mode: \(enabled ? "MSDF" : "SDF")")
+        updateUIMaterialDescriptorSet()
+    }
+
+    func setUITextSDFParameters(threshold: Float, range: Float) {
+        currentUIMaterial.sdfThreshold = threshold
+        currentUIMaterial.sdfRange = max(0.001, range)
+        print("UI text SDF params: threshold=\(threshold), range=\(currentUIMaterial.sdfRange)")
+        updateUIMaterialDescriptorSet()
     }
 
     // REMOVED: Old updateMaterialDescriptorSet(for pipelineType: PipelineType)
@@ -2285,6 +2431,16 @@ same here 0       1
                         UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
             buffer: &uiProjectionUBO,
             bufferAllocation: &uiProjectionUBOMemory
+        )
+
+        let uiMaterialUBOSize = VkDeviceSize(MemoryLayout<UIMaterialConstants>.stride)
+        createBuffer(
+            size: uiMaterialUBOSize,
+            usage: UInt32(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT.rawValue),
+            properties: UInt32(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT.rawValue) |
+                        UInt32(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.rawValue),
+            buffer: &uiMaterialUBO,
+            bufferAllocation: &uiMaterialUBOMemory
         )
     }
 
@@ -3276,7 +3432,7 @@ same here 0       1
                                                      VK_COLOR_COMPONENT_A_BIT.rawValue)
         
         // Set blend mode based on parameter
-        if blendMode == "alpha" {
+        if blendMode.lowercased() == "alpha" {
             colorBlendAttachment.blendEnable = VK_TRUE
             colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA
             colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
@@ -3393,6 +3549,33 @@ same here 0       1
             updateMaterialDescriptorSet()
             print("Re-updated material descriptor set with newly loaded textures")
         }
+    }
+
+    public func createUITextureRGBA(width: Int, height: Int, pixels: [UInt8], srgb: Bool = true) -> Int? {
+        guard let textureManager = textureManager else {
+            print("No texture manager available for UI texture creation")
+            return nil
+        }
+
+        // MSDF/UI atlases should use clamp + non-anisotropic sampling to avoid edge softening.
+        let textureIndex = textureManager.createTextureRGBA(width: width, height: height, pixels: pixels, srgb: srgb, preferClampSampler: true)
+        if textureIndex < 0 {
+            return nil
+        }
+        return textureIndex
+    }
+
+    public func createUITextureR8(width: Int, height: Int, pixels: [UInt8]) -> Int? {
+        guard let textureManager = textureManager else {
+            print("No texture manager available for UI texture creation")
+            return nil
+        }
+
+        let textureIndex = textureManager.createTextureR8(width: width, height: height, pixels: pixels)
+        if textureIndex < 0 {
+            return nil
+        }
+        return textureIndex
     }
 
 }

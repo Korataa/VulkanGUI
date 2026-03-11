@@ -1,3 +1,4 @@
+print("=== MAIN STARTED ===")
 //let cameraDistance: Float = 10.0  // Back to reasonable distanceThe Swift Programming Language
 // https://docs.swift.org/s// Camera orbit controls - Simple close position for debugging
 var cameraDistance: Float = 5.0  // Much closer for debugging
@@ -40,9 +41,6 @@ print("🎯 Enabling frustum culling...")
 graphics.settings = .performance  // Enable frustum culling
 // graphics.settings.debugCulling = true  // Uncomment to see culling stats
 
-// Test our new pipeline architecture
-graphics.testPipelineCreation()
-
 // Create ResourceSystem using graphics resource manager (high-level orchestrator)
 let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceManager)
 
@@ -66,25 +64,20 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     graphics.addModel(model: model)
     print("Model loaded successfully!")
     
-    // Create declarative UI - same visual result but cleaner code!
-    let gameHUD = Column(spacing: 20) {
-        // Top status bar
-        Row(spacing: 300) {
-            Text("HP: 100")
-                .background(.red)
-            
-            Text("Score: 0") 
-                .background(.green)
-        }
-        
-        Spacer()
-        
-        // Bottom left button
-        Text("Menu")
-            .background(.white)
+    // Restore original UI DSL style with colored backgrounds
+    let hpText = Text("HP: 100")
+        .background(.red)
+        .fontSize(32)
+        .textColor(.white)
+    let scoreText = Text("Score: 0")
+        .background(.green)
+        .fontSize(32)
+        .textColor(.black)
+    let gameHUD = Column(spacing: 40) {
+        hpText
+        scoreText
     }
     .padding(20)
-    
     // Set the UI - automatic rendering!
     uiManager.setRoot(gameHUD)
     
@@ -209,5 +202,5 @@ while !quit {
 
 // Cleanup after main loop
 print("🧹 Starting cleanup...")
-graphics.cleanup()
+// graphics.cleanup()
 print("✅ Cleanup completed")

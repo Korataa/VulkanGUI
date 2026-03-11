@@ -2,24 +2,12 @@
 
 echo "Compiling Vulkan shaders..."
 
-# Compile vertex shader
-echo "Compiling vertex shader..."
-glslc shader.vert -o vert.spv
-if [ $? -eq 0 ]; then
-    echo "✓ Vertex shader compiled successfully"
-else
-    echo "✗ Failed to compile vertex shader"
-    exit 1
-fi
-
-# Compile fragment shader
-echo "Compiling fragment shader..."
-glslc shader.frag -o frag.spv
-if [ $? -eq 0 ]; then
-    echo "✓ Fragment shader compiled successfully"
-else
-    echo "✗ Failed to compile fragment shader"
-    exit 1
-fi
+glslc shader.vert -o vert.spv || exit 1
+glslc shader.frag -o frag.spv || exit 1
+glslc shader2d.vert -o shader2d_vert.spv || exit 1
+glslc shader2d.frag -o shader2d_frag.spv || exit 1
+glslc ui.vert -o ui_vert.spv || exit 1
+glslc ui.frag -o ui_frag.spv || exit 1
+glslc ui_sdf.frag -o ui_sdf.spv || exit 1
 
 echo "All shaders compiled successfully!"

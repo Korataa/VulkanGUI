@@ -1,83 +1,77 @@
+import Foundation
 import Core
-import Math
 import Graphics
+import Math
 
 public class UIManager {
-    private let graphics: Graphics
+    private var graphics: Graphics
     private var rootElement: Element?
-    private var screenBounds: Rectangle
-    private var needsRebuild: Bool = false
-    private var cachedRenderables: [UIRenderable] = []
+    private var needsRebuild: Bool = true
+    private var screenBounds: Rectangle = Rectangle(position: Vector2(0, 0), width: 800, height: 600)
+    private var uiTimeSeconds: Float = 0.0
     private var hasInitializedUI: Bool = false
-    
-    public init(graphics: Graphics, screenBounds: Rectangle? = nil) {
+    private var cachedRenderables: [UIRenderable] = []
+    private var hasAnimatedTextGlow: Bool = false
+    private var textRenderer: TextRenderer?
+    private var sdfTextureID: UInt32?
+    private var textUsesMSDF: Bool = false
+    private var useAnimatedTextGlow: Bool = false
+    private var useSDFScaleComparisonOverlay: Bool = false
+    private var useTrueSDFTextMode: Bool = false
+
+    public init(graphics: Graphics) {
         self.graphics = graphics
-        self.screenBounds = screenBounds ?? Rectangle(position: Vector2(0, 0), width: 800, height: 600)
     }
-    
-    /// Set the root UI element - this triggers automatic rendering
+
     public func setRoot(_ element: Element) {
         rootElement = element
         needsRebuild = true
     }
-    
-    /// Update screen bounds (when window resizes)
+
     public func setScreenBounds(_ bounds: Rectangle) {
         screenBounds = bounds
         needsRebuild = true
     }
-    
-    /// Call this from your main loop - handles automatic updates
+
     public func update() {
+        uiTimeSeconds += (1.0 / 60.0)
+        if let root = rootElement {
+            print("[UI DEBUG] UIManager.update() called, root element: \(root.elementType), children: \(root.children.count)")
+        }
         if needsRebuild {
-            print("🚨 UI REBUILDING - this should only happen once!")
+            print("[UI DEBUG] UI REBUILDING")
             rebuild()
             needsRebuild = false
         }
-        // TEMPORARY FIX: Don't call rebuild() every frame - this was causing massive memory leak!
     }
-    
-    /// Force a UI rebuild (for reactive state changes)
+
     public func markNeedsRebuild() {
         needsRebuild = true
     }
-    
-    /// Internal: Rebuild the entire UI with smart caching
+
     private func rebuild() {
         guard let root = rootElement else { return }
-        
-        // Step 1: Perform layout (calculate positions and sizes)
+        hasAnimatedTextGlow = false
         let layoutedRoot = performLayout(root, in: screenBounds)
-        
-        // Step 2: Convert to UIRenderables
         let newRenderables = generateRenderables(from: layoutedRoot)
-        
-        // Step 3: Smart caching - only update graphics if renderables changed
         if hasInitializedUI && renderablesEqual(cachedRenderables, newRenderables) {
-            print("♻️ UI unchanged - reusing cached renderables (no GPU upload)")
+            print("[UI DEBUG] UI unchanged - reusing cached renderables")
             return
         }
-        
-        // UI has changed - update graphics system
-        print("🔄 UI changed - updating graphics (\(newRenderables.count) elements)")
+        print("[UI DEBUG] UI changed - updating graphics (\(newRenderables.count) elements)")
         graphics.clearUIElements()
-        
         if hasInitializedUI {
-            // Reuse existing UIRenderable objects if possible to preserve upload state
             let reusedRenderables = reuseCompatibleRenderables(cachedRenderables, newRenderables)
             reusedRenderables.forEach { graphics.addUIElement($0) }
             cachedRenderables = reusedRenderables
         } else {
-            // First time - create new renderables
             newRenderables.forEach { graphics.addUIElement($0) }
             cachedRenderables = newRenderables
             hasInitializedUI = true
         }
-        
-        print("🎨 UI update complete!")
+        print("[UI DEBUG] UI update complete!")
     }
-    
-    /// Compare two renderable arrays for equality
+
     private func renderablesEqual(_ a: [UIRenderable], _ b: [UIRenderable]) -> Bool {
         guard a.count == b.count else { return false }
         for (i, renderable) in a.enumerated() {
@@ -85,14 +79,18 @@ public class UIManager {
             if renderable.position != other.position ||
                renderable.size != other.size ||
                !colorsEqual(renderable.color, other.color) ||
-               renderable.textureID != other.textureID {
+               renderable.textureID != other.textureID ||
+               renderable.usesSDF != other.usesSDF ||
+               renderable.sdfThreshold != other.sdfThreshold ||
+               renderable.sdfRange != other.sdfRange ||
+               renderable.outlineWidth != other.outlineWidth ||
+               !colorsEqual(renderable.outlineColor, other.outlineColor) {
                 return false
             }
         }
         return true
     }
-    
-    /// Reuse existing UIRenderable objects if they match, to preserve GPU upload state
+
     private func reuseCompatibleRenderables(_ existing: [UIRenderable], _ new: [UIRenderable]) -> [UIRenderable] {
         guard existing.count == new.count else { return new }
         
@@ -104,7 +102,12 @@ public class UIManager {
             if existingRenderable.position == newRenderable.position &&
                existingRenderable.size == newRenderable.size &&
                colorsEqual(existingRenderable.color, newRenderable.color) &&
-               existingRenderable.textureID == newRenderable.textureID {
+               existingRenderable.textureID == newRenderable.textureID &&
+                    existingRenderable.usesSDF == newRenderable.usesSDF &&
+                    existingRenderable.sdfThreshold == newRenderable.sdfThreshold &&
+                    existingRenderable.sdfRange == newRenderable.sdfRange &&
+                    existingRenderable.outlineWidth == newRenderable.outlineWidth &&
+                    colorsEqual(existingRenderable.outlineColor, newRenderable.outlineColor) {
                 reused.append(existingRenderable)
             } else {
                 // Different - use the new one
@@ -113,11 +116,11 @@ public class UIManager {
         }
         return reused
     }
-    
+
     private func colorsEqual(_ a: Color, _ b: Color) -> Bool {
         return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a
     }
-    
+
     /// Layout algorithm - calculates final bounds for all elements
     private func performLayout(_ element: Element, in bounds: Rectangle) -> Element {
         var layoutedElement = element
@@ -193,20 +196,163 @@ public class UIManager {
                 textureID: textureID
             )
             renderables.append(renderable)
-            
-        case .text(_, _):
-            // For now, render text as colored rectangles
-            // TODO: Implement proper text rendering
-            // Use backgroundColor if set, otherwise fall back to textColor
-            let color = element.style.backgroundColor ?? element.style.textColor
-            print("🎨 Text element: backgroundColor=\(String(describing: element.style.backgroundColor)), textColor=\(element.style.textColor), final=\(color)")
-            let renderable = UIRenderable(
-                position: SIMD2(element.bounds.center.x, element.bounds.center.y),
-                size: SIMD2(element.bounds.width, element.bounds.height),
-                color: color,
-                textureID: nil
-            )
-            renderables.append(renderable)
+
+        case .text(let content, let font):
+
+            if let bg = element.style.backgroundColor {
+                renderables.append(UIRenderable(
+                    position: SIMD2(element.bounds.center.x, element.bounds.center.y),
+                    size: SIMD2(element.bounds.width, element.bounds.height),
+                    color: bg,
+                    textureID: nil
+                ))
+            }
+
+            if ensureSDFTextResources(), let textRenderer = textRenderer, let textureID = sdfTextureID {
+                let textColor = element.style.textColor
+                let requestedSize = max(8.0, font?.size ?? element.style.fontSize)
+                let scale = requestedSize / max(1.0, textRenderer.atlas.fontSize)
+                let measuredWidth = textRenderer.measureTextWidth(content, scale: scale)
+                let startX = element.bounds.position.x + max(0.0, (element.bounds.width - measuredWidth) * 0.5)
+                let baselineY = element.bounds.position.y + (element.bounds.height * 0.5) + (requestedSize * 0.35)
+
+                let baseThreshold = max(0.1, min(0.9, 0.5 - element.style.textWeight))
+                let glowStrength = max(0.0, element.style.textGlowStrength)
+                let glowSpeed = max(0.0, element.style.textGlowSpeed)
+                if useAnimatedTextGlow && glowStrength > 0.0 {
+                    hasAnimatedTextGlow = true
+                }
+
+                func applyTextMaterial(_ glyphs: inout [UIRenderable], outlineWidth: Float, outlineColor: Color, threshold: Float, range: Float, glowStrength: Float, glowSpeed: Float) {
+                    for index in glyphs.indices {
+                        glyphs[index].sdfThreshold = 0.5; // Force for debug
+                        glyphs[index].sdfRange = 4.0;      // Force for debug
+                        glyphs[index].outlineWidth = max(0.0, outlineWidth);
+                        glyphs[index].outlineColor = outlineColor;
+                        glyphs[index].baseOutlineWidth = max(0.0, outlineWidth);
+                        glyphs[index].glowStrength = glowStrength;
+                        glyphs[index].glowSpeed = glowSpeed;
+                        glyphs[index].reserved2 = 1.0; // Ensure MSDF path is used
+                    }
+                }
+
+                var shadowRenderables: [UIRenderable] = []
+                if element.style.textShadowColor.a > 0 {
+                    let shadowStart = SIMD2(
+                        startX + element.style.textShadowOffset.x,
+                        baselineY + element.style.textShadowOffset.y
+                    )
+                    shadowRenderables = textRenderer.buildGlyphRenderables(
+                        text: content,
+                        topLeft: shadowStart,
+                        color: element.style.textShadowColor,
+                        textureID: textureID,
+                        scale: scale
+                    )
+                    for i in shadowRenderables.indices {
+                        shadowRenderables[i].shadowColor = element.style.textShadowColor
+                        shadowRenderables[i].shadowOffset = SIMD2<Float>(element.style.textShadowOffset.x, element.style.textShadowOffset.y)
+                        shadowRenderables[i].glowColor = Color(255,255,255,0)
+                        shadowRenderables[i].glowWidth = 0.0
+                    }
+                    applyTextMaterial(
+                        &shadowRenderables,
+                        outlineWidth: 0.0,
+                        outlineColor: element.style.textOutlineColor,
+                        threshold: baseThreshold,
+                        range: textRenderer.atlas.distanceRange,
+                        glowStrength: 0.0,
+                        glowSpeed: 0.0
+                    )
+                }
+
+                var glowRenderables: [UIRenderable] = []
+                if glowStrength > 0.0 {
+                    let animatedGlow = useAnimatedTextGlow
+                        ? (sin(uiTimeSeconds * glowSpeed * 6.28318) * 0.5 + 0.5) * glowStrength
+                        : glowStrength
+                    let glowThreshold = max(0.05, min(0.95, baseThreshold - animatedGlow))
+                    glowRenderables = textRenderer.buildGlyphRenderables(
+                        text: content,
+                        topLeft: SIMD2(startX, baselineY),
+                        color: element.style.textGlowColor,
+                        textureID: textureID,
+                        scale: scale
+                    )
+                    for i in glowRenderables.indices {
+                        glowRenderables[i].glowColor = element.style.textGlowColor
+                        glowRenderables[i].glowWidth = element.style.textGlowStrength
+                        glowRenderables[i].shadowColor = Color(0,0,0,0)
+                        glowRenderables[i].shadowOffset = SIMD2<Float>(0,0)
+                    }
+                    applyTextMaterial(
+                        &glowRenderables,
+                        outlineWidth: 0.0,
+                        outlineColor: element.style.textOutlineColor,
+                        threshold: glowThreshold,
+                        range: textRenderer.atlas.distanceRange,
+                        glowStrength: 0.0,
+                        glowSpeed: 0.0
+                    )
+                }
+
+                var glyphRenderables = textRenderer.buildGlyphRenderables(
+                    text: content,
+                    topLeft: SIMD2(startX, baselineY),
+                    color: textColor,
+                    textureID: textureID,
+                    scale: scale
+                )
+                for i in glyphRenderables.indices {
+                    glyphRenderables[i].glowColor = element.style.textGlowColor
+                    glyphRenderables[i].glowWidth = element.style.textGlowStrength
+                    glyphRenderables[i].shadowColor = element.style.textShadowColor
+                    glyphRenderables[i].shadowOffset = SIMD2<Float>(element.style.textShadowOffset.x, element.style.textShadowOffset.y)
+                }
+                applyTextMaterial(
+                    &glyphRenderables,
+                    outlineWidth: element.style.textOutlineWidth,
+                    outlineColor: element.style.textOutlineColor,
+                    threshold: baseThreshold,
+                    range: textRenderer.atlas.distanceRange,
+                    glowStrength: 0.0,
+                    glowSpeed: 0.0
+                )
+
+                renderables.append(contentsOf: shadowRenderables)
+                renderables.append(contentsOf: glowRenderables)
+                renderables.append(contentsOf: glyphRenderables)
+
+                if useSDFScaleComparisonOverlay && content == "HP: 100" {
+                    let samples: [(String, Float, SIMD2<Float>)] = [
+                        ("MSDF tiny 8px", 8.0 / max(1.0, textRenderer.atlas.fontSize), SIMD2<Float>(20.0, 36.0)),
+                        ("MSDF 1x", scale, SIMD2<Float>(20.0, 80.0)),
+                        ("MSDF 4x", scale * 4.0, SIMD2<Float>(20.0, 140.0)),
+                        ("MSDF 8x", scale * 8.0, SIMD2<Float>(20.0, 300.0)),
+                        ("MSDF 20x", scale * 20.0, SIMD2<Float>(20.0, 520.0))
+                    ]
+                    for sample in samples {
+                        let testRenderables = textRenderer.buildGlyphRenderables(
+                            text: sample.0,
+                            topLeft: sample.2,
+                            color: Color.white,
+                            textureID: textureID,
+                            scale: sample.1
+                        )
+                        renderables.append(contentsOf: testRenderables)
+                    }
+                }
+            } else {
+                // Fallback path while SDF resources are unavailable.
+                let color = element.style.textColor
+                let renderable = UIRenderable(
+                    position: SIMD2(element.bounds.center.x, element.bounds.center.y),
+                    size: SIMD2(element.bounds.width, element.bounds.height),
+                    color: color,
+                    textureID: nil
+                )
+                renderables.append(renderable)
+            }
             
         case .container:
             // Containers don't render themselves, just their children
@@ -232,5 +378,83 @@ public class UIManager {
         }
         
         return renderables
+    }
+
+    private func ensureSDFTextResources() -> Bool {
+        if textRenderer != nil && sdfTextureID != nil {
+            return true
+        }
+
+        guard let assetsPath = getAssetsPath() else {
+            print("Failed to resolve assets path for SDF font loading")
+            return false
+        }
+
+        let msdfJSONPath = "\(assetsPath)/Fonts/JetBrainsMono-msdf.json"
+        let msdfImagePath = "\(assetsPath)/Fonts/JetBrainsMono-msdf.png"
+
+        var atlas: FontAtlas
+        var textureID: UInt32
+
+        if let msdf = MSDFLoader.load(fromJSON: msdfJSONPath, imagePath: msdfImagePath) {
+            print("MSDF font assets loaded")
+            atlas = msdf.atlas
+            textUsesMSDF = true
+            guard let uploadedTextureID = graphics.createUITextureRGBA(
+                width: msdf.width,
+                height: msdf.height,
+                pixels: msdf.rgbaPixels,
+                srgb: false
+            ) else {
+                print("Failed to upload MSDF atlas texture to Vulkan")
+                return false
+            }
+            textureID = uploadedTextureID
+        } else {
+            print("MSDF assets not found. Falling back to runtime SDF generation.")
+            let fontPath = "\(assetsPath)/Fonts/JetBrainsMono-Regular.ttf"
+            guard let fontData = try? Data(contentsOf: URL(fileURLWithPath: fontPath)) else {
+                print("Failed to load font file at \(fontPath)")
+                return false
+            }
+            print("SDF font file: \(fontPath) (\(fontData.count) bytes)")
+
+            guard let generatedAtlas = FontAtlas.generate(from: fontData, fontSize: 48.0, atlasSize: 1024, distanceRange: 6.0) else {
+                print("Failed to generate SDF font atlas")
+                return false
+            }
+            atlas = generatedAtlas
+            textUsesMSDF = false
+
+            guard let uploadedTextureID = graphics.createUITextureR8(
+                width: atlas.textureWidth,
+                height: atlas.textureHeight,
+                pixels: atlas.textureData
+            ) else {
+                print("Failed to upload SDF atlas texture to Vulkan")
+                return false
+            }
+            textureID = uploadedTextureID
+        }
+
+        if let minValue = atlas.textureData.min(), let maxValue = atlas.textureData.max() {
+            print("SDF atlas value range: min=\(minValue), max=\(maxValue)")
+        }
+
+        if let adv0 = atlas.glyphs["0"]?.advance,
+           let adv1 = atlas.glyphs["1"]?.advance,
+           let advI = atlas.glyphs["i"]?.advance,
+           let advM = atlas.glyphs["M"]?.advance {
+            print("SDF advance check (0,1,i,M): \(adv0), \(adv1), \(advI), \(advM)")
+        }
+
+        self.textRenderer = TextRenderer(atlas: atlas)
+        self.sdfTextureID = textureID
+        graphics.setUITextSDFParameters(threshold: 0.5, range: atlas.distanceRange)
+        // True reconstruction is tuned for MSDF atlas assets. Keep fallback SDF in readable mode.
+        graphics.setUITextTrueSDFMode(textUsesMSDF && useTrueSDFTextMode)
+        graphics.setUITextMSDFMode(textUsesMSDF)
+        print("Text resources initialized (texture id: \(textureID), mode: \(textUsesMSDF ? "MSDF" : "SDF"))")
+        return true
     }
 }

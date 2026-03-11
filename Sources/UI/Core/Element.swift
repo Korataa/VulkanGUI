@@ -156,7 +156,58 @@ public extension Element {
     
     func background(_ color: Color) -> Element {
         var copy = self
-        copy.style.backgroundColor = color
+        var styleCopy = copy.style
+        styleCopy.backgroundColor = color
+        copy.style = styleCopy
+        print("[UI DEBUG] .background(_:) called. Set backgroundColor to \(color). Full style: \(copy.style)")
+        return copy
+    }
+
+    func textColor(_ color: Color) -> Element {
+        var copy = self
+        var styleCopy = copy.style
+        styleCopy.textColor = color
+        copy.style = styleCopy
+        print("[UI DEBUG] .textColor(_:) called. Set textColor to \(color). Full style: \(copy.style)")
+        return copy
+    }
+
+    func fontSize(_ size: Float) -> Element {
+        var copy = self
+        copy.style.fontSize = size
+        if case .text(let content, _) = copy.elementType {
+            copy.elementType = .text(content: content, font: Font.system(size: size))
+        }
+        return copy
+    }
+
+    // Positive values make text bolder, negative values make text thinner.
+    func textWeight(_ value: Float) -> Element {
+        var copy = self
+        copy.style.textWeight = value
+        return copy
+    }
+
+    func textOutline(width: Float, color: Color = .black) -> Element {
+        var copy = self
+        copy.style.textOutlineWidth = max(0.0, width)
+        copy.style.textOutlineColor = color
+        return copy
+    }
+
+    func textShadow(offset: Vector2 = Vector2(1.5, 1.5), color: Color = Color(0, 0, 0, 160)) -> Element {
+        var copy = self
+        copy.style.textShadowOffset = offset
+        copy.style.textShadowColor = color
+        return copy
+    }
+
+    // Glow is rendered as an animated outline ring around glyph edges.
+    func textGlow(strength: Float, color: Color = Color(120, 220, 255, 200), speed: Float = 2.0) -> Element {
+        var copy = self
+        copy.style.textGlowStrength = max(0.0, strength)
+        copy.style.textGlowColor = color
+        copy.style.textGlowSpeed = max(0.0, speed)
         return copy
     }
     

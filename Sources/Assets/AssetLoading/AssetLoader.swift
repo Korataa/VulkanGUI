@@ -187,155 +187,54 @@ public class AssetLoader {
             nodeTransforms.append(transform)
         }
 
-        // --- 6. Process scene nodes to find node-to-mesh mapping ---
-        var nodeMeshMap: [Int: [Int]] = [:]  // node index -> [mesh indices]
-        for i in 0..<dataVal.nodes_count {
-            let node = dataVal.nodes[i]
-            if node.mesh != nil {
-                let meshIndex = Int(node.mesh - dataVal.meshes)
-                if nodeMeshMap[i] == nil {
-                    nodeMeshMap[i] = []
-                }
-                nodeMeshMap[i]?.append(meshIndex)
-            }
+        // --- 6. (Finally) load mesh data and upload to buffers ---
+        guard let meshes = loadMeshes(from: dataVal) else {
+            return nil
         }
 
-        // --- 7. (Finally) load mesh data and upload to buffers ---
+        return LoadedModel(
+            meshes: meshes,
+            textureStorage: textureStorage,
+            materials: materials,
+            nodeTransforms: nodeTransforms
+        )
+    }
+
+    private func loadMeshes(from dataVal: cgltf_data) -> [LoadedMesh]? {
         guard resourceManager.staticVertexBuffer != nil,
               resourceManager.indexBuffer != nil else {
-                if resourceManager.staticVertexBuffer == nil {
-                    print("Error: staticVertexBuffer is nil")
-                }
-                if resourceManager.indexBuffer == nil {
-                    print("Error: indexBuffer is nil")
-                }
-                print("Error: Buffers not initialized")
-                return nil
+            if resourceManager.staticVertexBuffer == nil {
+                print("Error: staticVertexBuffer is nil")
+            }
+            if resourceManager.indexBuffer == nil {
+                print("Error: indexBuffer is nil")
+            }
+            print("Error: Buffers not initialized")
+            return nil
         }
 
         var meshes: [LoadedMesh] = []
-
         for i in 0..<dataVal.meshes_count {
             let mesh = dataVal.meshes[i]
-            
             for j in 0..<mesh.primitives_count {
                 let prim = mesh.primitives[j]
+                let (positions, normals, texCoords) = extractVertexAttributes(from: prim)
+                let (vertices, minBounds, maxBounds) = buildVerticesAndBounds(
+                    positions: positions,
+                    normals: normals,
+                    texCoords: texCoords
+                )
+                let indices = extractIndices(from: prim)
 
-                // --- Extract vertex atttributes ---
-                var positions: [SIMD3<Float>] = []
-                var normals: [SIMD3<Float>] = []
-                var texCoords: [SIMD2<Float>] = []
-
-                for k in 0..<prim.attributes_count {
-                    let attr = prim.attributes[k]
-                    let accessor = attr.data?.pointee
-                    guard let accessor = accessor,
-                            let bufferView = accessor.buffer_view?.pointee,
-                            let buffer = bufferView.buffer?.pointee else { continue }
-
-                    let offset = Int(bufferView.offset) + Int(accessor.offset)
-                    let stride = bufferView.stride != 0 ? Int(bufferView.stride) : 
-                        attr.type == cgltf_attribute_type_position ?
-                            (3 * MemoryLayout<Float>.stride) :  //position: 3 floats * 4 bytes = 12 bytes
-                            (2 * MemoryLayout<Float>.stride)    //texcoord: 2 floats * 4 bytes = 8 bytes
-                    let count = accessor.count
-
-                    guard let bufferData = buffer.data else {
-                        print("Warning: buffer.data is nil for attribute type \(attributeTypeToString(attr.type)), skipping this attribute.")
-                        continue
-                    }
-                    if attr.type == cgltf_attribute_type_position {
-                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
-                        for v in 0..<count {
-                            let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
-                            let pos = SIMD3<Float>(ptr[0], ptr[1], ptr[2])
-                            positions.append(pos)
-                            // Print first few positions for debugging
-                            if v < 5 {
-                            }
-                        }
-                    } else if attr.type == cgltf_attribute_type_normal {
-                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
-                        for v in 0..<count {
-                            let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
-                            normals.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
-                        }
-                    } else if attr.type == cgltf_attribute_type_texcoord {
-                        let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
-                        for v in 0..<count {
-                            let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
-                            texCoords.append(SIMD2<Float>(ptr[0], ptr[1]))
-                        }
-                    }
-                }
-
-                // --- interleave vertex data ---
-                var vertices: [Vertex3D] = []
-                
-                // Initialize bounds for this mesh
-                var minBounds = Vector3(Float.infinity, Float.infinity, Float.infinity)
-                var maxBounds = Vector3(-Float.infinity, -Float.infinity, -Float.infinity)
-                
-                
-                for v in 0..<positions.count {
-                    let pos = positions[v]
-                    let norm = v < normals.count ? normals[v] : SIMD3<Float>(0, 0, 0)
-                    let uv = v < texCoords.count ? texCoords[v] : SIMD2<Float>(0, 0)
-                    
-                    // DON'T apply node transform for now - let's see the raw model
-                    vertices.append(Vertex3D(position: pos, normal: norm, texCoord: uv))
-                    
-                    // Update bounds with original position  
-                    let vertexPos = Vector3(pos.x, pos.y, pos.z)
-                    minBounds = Vector3(
-                        min(minBounds.x, vertexPos.x),
-                        min(minBounds.y, vertexPos.y),
-                        min(minBounds.z, vertexPos.z)
-                    )
-                    maxBounds = Vector3(
-                        max(maxBounds.x, vertexPos.x),
-                        max(maxBounds.y, vertexPos.y),
-                        max(maxBounds.z, vertexPos.z)
-                    )
-                }
-
-
-                // --- Extract indices ---
-                var indices: [UInt32] = []
-                if  let indicesAccessor = prim.indices?.pointee,
-                    let bufferView = indicesAccessor.buffer_view?.pointee,
-                    let buffer = bufferView.buffer?.pointee {
-                        let offset = Int(bufferView.offset) + Int(indicesAccessor.offset)
-                        let indexCount = indicesAccessor.count
-                        let indexType = indicesAccessor.component_type
-
-                        if indexType == cgltf_component_type_r_16u {
-                            let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt16.self)
-                            for i in 0..<indexCount {
-                                indices.append(UInt32(basePtr[i]))
-                            }
-                        } else if indexType == cgltf_component_type_r_32u {
-                            let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
-                            for i in 0..<indexCount {
-                                indices.append(basePtr[i])
-                            }
-                        }
-                        
-                }
-
-                // --- Upload to buffers and create mesh descriptor ---
                 do {
-                    // Use high-performance staging buffer uploads via VulkanResourceManager
                     let vertexRegion = try resourceManager.allocateStaticVertices(vertices: vertices)
                     let indexRegion = try resourceManager.allocateIndices(indices: indices)
-                
-                    
-                    // Check for out-of-bounds indices
+
                     let maxIndex = indices.max() ?? 0
                     if maxIndex >= vertices.count {
                         print("ERROR: Index out of bounds! Max index: \(maxIndex), vertex count: \(vertices.count)")
                     }
-                
+
                     meshes.append(LoadedMesh(
                         vertexOffset: vertexRegion.offset,
                         vertexCount: vertices.count,
@@ -351,12 +250,107 @@ public class AssetLoader {
             }
         }
 
-        return LoadedModel(
-            meshes: meshes,
-            textureStorage: textureStorage,
-            materials: materials,
-            nodeTransforms: nodeTransforms
-        )
+        return meshes
+    }
+
+    private func extractVertexAttributes(from prim: cgltf_primitive) -> ([SIMD3<Float>], [SIMD3<Float>], [SIMD2<Float>]) {
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var texCoords: [SIMD2<Float>] = []
+
+        for k in 0..<prim.attributes_count {
+            let attr = prim.attributes[k]
+            let accessor = attr.data?.pointee
+            guard let accessor = accessor,
+                  let bufferView = accessor.buffer_view?.pointee,
+                  let buffer = bufferView.buffer?.pointee else { continue }
+
+            let offset = Int(bufferView.offset) + Int(accessor.offset)
+            let stride: Int
+            if bufferView.stride != 0 {
+                stride = Int(bufferView.stride)
+            } else if attr.type == cgltf_attribute_type_position {
+                stride = 3 * MemoryLayout<Float>.stride
+            } else {
+                stride = 2 * MemoryLayout<Float>.stride
+            }
+
+            let count = accessor.count
+            guard let bufferData = buffer.data else {
+                print("Warning: buffer.data is nil for attribute type \(attributeTypeToString(attr.type)), skipping this attribute.")
+                continue
+            }
+
+            if attr.type == cgltf_attribute_type_position {
+                let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                for v in 0..<count {
+                    let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
+                    positions.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
+                }
+            } else if attr.type == cgltf_attribute_type_normal {
+                let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                for v in 0..<count {
+                    let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
+                    normals.append(SIMD3<Float>(ptr[0], ptr[1], ptr[2]))
+                }
+            } else if attr.type == cgltf_attribute_type_texcoord {
+                let basePtr = bufferData.advanced(by: offset).assumingMemoryBound(to: Float.self)
+                for v in 0..<count {
+                    let ptr = basePtr.advanced(by: v * (stride / MemoryLayout<Float>.size))
+                    texCoords.append(SIMD2<Float>(ptr[0], ptr[1]))
+                }
+            }
+        }
+
+        return (positions, normals, texCoords)
+    }
+
+    private func buildVerticesAndBounds(
+        positions: [SIMD3<Float>],
+        normals: [SIMD3<Float>],
+        texCoords: [SIMD2<Float>]
+    ) -> ([Vertex3D], Vector3, Vector3) {
+        var vertices: [Vertex3D] = []
+        var minBounds = Vector3(Float.infinity, Float.infinity, Float.infinity)
+        var maxBounds = Vector3(-Float.infinity, -Float.infinity, -Float.infinity)
+
+        for v in 0..<positions.count {
+            let pos = positions[v]
+            let norm = v < normals.count ? normals[v] : SIMD3<Float>(0, 0, 0)
+            let uv = v < texCoords.count ? texCoords[v] : SIMD2<Float>(0, 0)
+            vertices.append(Vertex3D(position: pos, normal: norm, texCoord: uv))
+
+            let vertexPos = Vector3(pos.x, pos.y, pos.z)
+            minBounds = Vector3(min(minBounds.x, vertexPos.x), min(minBounds.y, vertexPos.y), min(minBounds.z, vertexPos.z))
+            maxBounds = Vector3(max(maxBounds.x, vertexPos.x), max(maxBounds.y, vertexPos.y), max(maxBounds.z, vertexPos.z))
+        }
+
+        return (vertices, minBounds, maxBounds)
+    }
+
+    private func extractIndices(from prim: cgltf_primitive) -> [UInt32] {
+        var indices: [UInt32] = []
+        if let indicesAccessor = prim.indices?.pointee,
+           let bufferView = indicesAccessor.buffer_view?.pointee,
+           let buffer = bufferView.buffer?.pointee {
+            let offset = Int(bufferView.offset) + Int(indicesAccessor.offset)
+            let indexCount = indicesAccessor.count
+            let indexType = indicesAccessor.component_type
+
+            if indexType == cgltf_component_type_r_16u {
+                let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt16.self)
+                for i in 0..<indexCount {
+                    indices.append(UInt32(basePtr[i]))
+                }
+            } else if indexType == cgltf_component_type_r_32u {
+                let basePtr = buffer.data!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
+                for i in 0..<indexCount {
+                    indices.append(basePtr[i])
+                }
+            }
+        }
+
+        return indices
     }
 
     // Convert a LoadedMesh to a Mesh instance

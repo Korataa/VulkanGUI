@@ -1,3 +1,4 @@
+import Logging
 import Platform
 import Core
 import Math
@@ -5,6 +6,19 @@ import Cvulkan
 import Cvma
 
 public class Graphics {
+    private struct UITextBatchKey: Hashable {
+        let textureID: UInt32?
+        let sdfThreshold: Float
+        let sdfRange: Float
+        let outlineWidth: Float
+        let outlineColor: Color
+    }
+
+    private struct OrderedBatch<Key: Hashable> {
+        let key: Key
+        var elements: [UIRenderable]
+    }
+
     // Struct to bundle info for ResourceSystem
     public struct ResourceSystemInfo {
         public let device: VkDevice
@@ -182,22 +196,92 @@ public class Graphics {
             print("♻️ No UI changes detected - skipping upload")
         }
         
-        let uiModels = [ModelUI(from: uiElements)]
-        
-        // Filter out empty models
-        let nonEmptyModels = uiModels.filter { !$0.isEmpty }
-        guard !nonEmptyModels.isEmpty else {
-            print("📦 No UI models to render - INTENTIONALLY BROKEN FOR TESTING")
-            return
+        let solidElements = uiElements.filter { !$0.usesSDF && $0.textureID == nil }
+        let texturedElements = uiElements.filter { !$0.usesSDF && $0.textureID != nil }
+        let sdfElements = uiElements.filter { $0.usesSDF && $0.textureID != nil }
+
+        renderUIBatch(elements: solidElements, pipeline: getUIPipeline(), textureMode: 0, textureID: nil)
+
+        for batch in orderedBatches(from: texturedElements, keySelector: { $0.textureID }) {
+            renderUIBatch(elements: batch.elements, pipeline: getUIPipeline(), textureMode: 1, textureID: batch.key)
         }
-        
-        // Use existing UI pipeline (same pattern as 3D rendering)
-        let pipeline = getUIPipeline()
+
+        let sdfOrderedGroups = orderedBatches(from: sdfElements) { element in
+            UITextBatchKey(
+                textureID: element.textureID,
+                sdfThreshold: element.sdfThreshold,
+                sdfRange: element.sdfRange,
+                outlineWidth: element.outlineWidth,
+                outlineColor: element.outlineColor
+            )
+        }
+        for batch in sdfOrderedGroups {
+            let batchKey = batch.key
+            renderUIBatch(
+                elements: batch.elements,
+                pipeline: getUISDFPipeline(),
+                textureMode: 3,
+                textureID: batchKey.textureID,
+                sdfThreshold: batchKey.sdfThreshold,
+                sdfRange: batchKey.sdfRange,
+                outlineWidth: batchKey.outlineWidth,
+                outlineColor: batchKey.outlineColor
+            )
+        }
+    }
+
+    private func orderedBatches<Key: Hashable>(from elements: [UIRenderable], keySelector: (UIRenderable) -> Key) -> [OrderedBatch<Key>] {
+        var ordered: [OrderedBatch<Key>] = []
+        var indexByKey: [Key: Int] = [:]
+
+        for element in elements {
+            let key = keySelector(element)
+            if let existingIndex = indexByKey[key] {
+                ordered[existingIndex].elements.append(element)
+            } else {
+                indexByKey[key] = ordered.count
+                ordered.append(OrderedBatch(key: key, elements: [element]))
+            }
+        }
+
+        return ordered
+    }
+
+    private func renderUIBatch(
+        elements: [UIRenderable],
+        pipeline: Pipeline,
+        textureMode: Int32,
+        textureID: UInt32?,
+        sdfThreshold: Float? = nil,
+        sdfRange: Float? = nil,
+        outlineWidth: Float? = nil,
+        outlineColor: Color? = nil
+    ) {
+        guard !elements.isEmpty else { return }
+
+        // For solid color UI (text, rectangles) and SDF text, use the color of the first element as tint
+        var tint: Color = .white
+        if (textureMode == 0 || textureMode == 3), let first = elements.first {
+            tint = first.color
+        }
+
+        renderer.setUIMaterial(
+            textureMode: textureMode,
+            textureIndex: textureID.map { Int($0) },
+            tint: tint,
+            sdfThreshold: sdfThreshold,
+            sdfRange: sdfRange,
+            outlineWidth: outlineWidth,
+            outlineColor: outlineColor
+        )
+
+        let model = ModelUI(from: elements)
+        guard !model.isEmpty else { return }
+
         if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
-            print("🎨 Rendering UI using ModelUI architecture")
-            vulkanPipeline.renderUI(models: nonEmptyModels)
+            vulkanPipeline.renderUI(models: [model])
         } else {
-            print("❌ Failed to get UI pipeline for rendering")
+            print("❌ Failed to get Vulkan UI pipeline for batch")
         }
     }
     
@@ -271,7 +355,6 @@ public class Graphics {
             render3DModels(renderModels)
         }
         
-        // Render UI elements on top of 3D models
         renderUIElements()
         
         // End render pass and present frame
@@ -352,6 +435,40 @@ public class Graphics {
         )
         return pipelineManager.createOrGetPipeline(desc: descriptor, device: renderer.logicalDevice)
     }
+
+    private func getUISDFPipeline() -> Pipeline {
+        return pipelineManager.createOrGetUISDFPipeline(device: renderer.logicalDevice)
+    }
+
+    public func createUITextureRGBA(width: Int, height: Int, pixels: [UInt8], srgb: Bool = true) -> UInt32? {
+        guard let textureIndex = renderer.createUITextureRGBA(width: width, height: height, pixels: pixels, srgb: srgb) else {
+            return nil
+        }
+        return UInt32(textureIndex)
+    }
+
+    public func createUITextureR8(width: Int, height: Int, pixels: [UInt8]) -> UInt32? {
+        guard let textureIndex = renderer.createUITextureR8(width: width, height: height, pixels: pixels) else {
+            return nil
+        }
+        return UInt32(textureIndex)
+    }
+
+    public func setUITextTrueSDFMode(_ enabled: Bool) {
+        renderer.setUITextTrueSDFMode(enabled)
+    }
+
+    public func setUITextSDFStepDebugMode(_ enabled: Bool) {
+        renderer.setUITextSDFStepDebugMode(enabled)
+    }
+
+    public func setUITextMSDFMode(_ enabled: Bool) {
+        renderer.setUITextMSDFMode(enabled)
+    }
+
+    public func setUITextSDFParameters(threshold: Float, range: Float) {
+        renderer.setUITextSDFParameters(threshold: threshold, range: range)
+    }
     
     /// Helper to load shader source (you'll need to implement this based on how you load shaders)
     private func loadShaderIfNeeded(_ filename: String) -> String? {
@@ -360,54 +477,7 @@ public class Graphics {
         return nil
     }
 
-    // MARK: - Pipeline Testing
-    
-    /// Test both 3D and UI pipeline creation - call this after initialize()  
-    public func testPipelineCreation() {
-        print("=== Testing Pipeline Creation ===")
-        
-        // Test 3D pipeline creation
-        print("Creating 3D graphics pipeline...")
-        let pipeline3D = get3DPipeline()
-        print("✅ 3D pipeline created successfully: \(type(of: pipeline3D))")
-        
-        // Test UI pipeline creation  
-        print("Creating UI pipeline...")
-        let pipelineUI = getUIPipeline()
-        print("✅ UI pipeline created successfully: \(type(of: pipelineUI))")
-        
-        // Test basic pipeline binding (disabled - needs command buffer context)
-        print("Pipeline binding test skipped (requires command buffer recording)")
-        // TODO: Test pipeline binding within actual render pass context
-        
-        print("=== Pipeline Test Complete ===")
-    }
-
     public func cleanup() {
-        print("🧹 Starting Graphics cleanup in proper order...")
-        
-        // 0. CRITICAL: Wait for all GPU operations to complete BEFORE destroying anything
-        vkLog("🔄 Waiting for GPU to finish all operations before cleanup...")
-        vkDeviceWaitIdle(renderer.logicalDevice)
-        
-        // Also reset command buffers to clear any resource references
-        if let cmdBuf = renderer.commandBuffer {
-            vkLog("🔄 Resetting command buffer to clear resource references")
-            vkResetCommandBuffer(cmdBuf, 0)
-        }
-        
-        // Wait again after reset to ensure all references are cleared
-        vkDeviceWaitIdle(renderer.logicalDevice)
-        vkLog("✅ GPU operations completed, safe to destroy resources")
-        
-        // 1. Clean up pipelines first (they reference resources)
-        pipelineManager?.cleanupAllPipelines()
-        
-        // 2. Clean up resource managers BEFORE renderer (to free VMA buffers before VMA destruction)
-        print("🧹 Cleaning up VulkanResourceManager buffers...")
         graphicsResourceManager?.cleanup()
-        
-        // 3. Finally clean up renderer (destroys VMA allocator)
-        renderer.cleanup()
     }
 }

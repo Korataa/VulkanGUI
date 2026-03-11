@@ -71,15 +71,21 @@ let package = Package(
             sources: ["stb_image.c"],
             publicHeadersPath: "."
         ),
-        .systemLibrary(
+        .target(
             name: "Cstb_truetype",
-            path: "Sources/ThirdParty/Cstb_truetype"
+            dependencies: [],
+            path: "Sources/ThirdParty/Cstb_truetype",
+            sources: ["stb_truetype.c"],
+            publicHeadersPath: "."
         ),
         .target(
             name: "Cvma",
             dependencies: ["Cvulkan"],
             path: "Sources/ThirdParty/Cvma",
             publicHeadersPath: "include",
+            cSettings: [
+                .unsafeFlags(unsafeIncludeFlags)
+            ],
             cxxSettings: [
                 .unsafeFlags(unsafeIncludeFlags + ["-Wno-nullability-completeness"])
             ]
@@ -104,6 +110,9 @@ let package = Package(
             name: "Audio",
             dependencies: ["Platform"],
             path: "Sources/Audio",
+            cSettings: [
+                .unsafeFlags(unsafeIncludeFlags)
+            ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
@@ -123,8 +132,13 @@ let package = Package(
             ]
         ),
         .target(
+            name: "Logging",
+            dependencies: [],
+            path: "Sources/Logging"
+        ),
+        .target(
             name: "Graphics",
-            dependencies: ["Core", "Math", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image", "Cstb_truetype"],
+            dependencies: ["Core", "Math", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image", "Cstb_truetype", "Logging"],
             path: "Sources/Graphics",
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
@@ -140,14 +154,20 @@ let package = Package(
             name: "Assets",
             dependencies: ["Core", "Math", "Graphics", "Cgltf", "Cstb_image"],
             path: "Sources/Assets",
+            cSettings: [
+                .unsafeFlags(unsafeIncludeFlags)
+            ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
         ),
         .target(
             name: "UI",
-            dependencies: ["Core", "Math", "Graphics", "Cstb_truetype", "Cstb_image"],
+            dependencies: ["Core", "Math", "Graphics", "Cstb_truetype", "Cstb_image", "Logging"],
             path: "Sources/UI",
+            cSettings: [
+                .unsafeFlags(unsafeIncludeFlags)
+            ],
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
@@ -155,7 +175,7 @@ let package = Package(
 
         .executableTarget(
             name: "DeckRPG",
-            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI"],
+            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI", "Logging"],
             path: "Sources/Runtime",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))

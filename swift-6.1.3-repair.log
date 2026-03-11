@@ -1,0 +1,146 @@
+[41FC:4854][2026-03-09T17:44:51]i001: Burn x64 v4.0.5+b9b2f1b4c69a1b509d487dc950b30b4ec9b0d040, Windows v10.0 x64 (Build 26200: Service Pack 0), path: C:\Users\clg11\AppData\Local\Package Cache\{C4D4837A-7537-4084-92A3-11E7201A66EE}\installer.exe
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing formatted variable 'InstallRoot' to value '[LocalAppDataFolder]Programs\Swift'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallBLD' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallCLI' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallDBG' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallIDE' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallRTL' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallUtilities' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsSDKX86' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsRedistX86' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsSDKAMD64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsRedistAMD64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsSDKARM64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallWindowsRedistARM64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallAndroidSDKARM64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallAndroidSDKAMD64' to value '1'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallAndroidSDKARM' to value '0'
+[41FC:4854][2026-03-09T17:44:51]i000: Initializing numeric variable 'OptionsInstallAndroidSDKX86' to value '0'
+[41FC:4854][2026-03-09T17:44:51]i009: Command Line: '"-burn.clean.room=C:\Users\clg11\AppData\Local\Package Cache\{C4D4837A-7537-4084-92A3-11E7201A66EE}\installer.exe" -burn.filehandle.attached=656 -burn.filehandle.self=652 /log C:\GameDev\DeckRPG\swift-6.1.3-repair.log /passive /repair /norestart'
+[41FC:4854][2026-03-09T17:44:51]i000: Setting string variable 'WixBundleLog' to value 'C:\GameDev\DeckRPG\swift-6.1.3-repair.log'
+[41FC:2114][2026-03-09T17:44:51]i000: Setting version variable 'WixBundleFileVersion' to value '6.1.3.0'
+[41FC:4854][2026-03-09T17:44:51]i100: Detect begin, 8 packages
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {988E36D0-8D66-4295-9ABF-B51A33509CDB}, scope: PerUser, version: 6.2.4, language: 0 operation: Downgrade
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {96058A77-9F2D-47DB-AB16-7062074099CA}, scope: PerUser, version: 6.3.0, language: 0 operation: None
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {3BD8277F-FF5E-42CC-83E2-38154F07CEA5}, scope: PerUser, version: 6.2.4, language: 0 operation: Downgrade
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {E3306425-DDBF-4601-8AEC-A1F7E0BFB609}, scope: PerUser, version: 6.3.0, language: 0 operation: None
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {BDEF3AE6-F014-42DC-8C09-ED954BC95042}, scope: PerUser, version: 6.2.4, language: 0 operation: Downgrade
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {8E0EDF64-0732-42EE-B786-6AF28A3652C2}, scope: PerUser, version: 6.3.0, language: 0 operation: None
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {A067BBC2-502E-429C-8B58-96B106DA52E9}, scope: PerUser, version: 6.2.4, language: 0 operation: Downgrade
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {160CC659-E6FF-402D-8E72-77C8DCCF00A0}, scope: PerUser, version: 6.3.0, language: 0 operation: None
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {048FBF16-0583-427D-9D14-5D47110D9EE9}, scope: PerUser, version: 6.2.4, language: 0 operation: Downgrade
+[41FC:4854][2026-03-09T17:44:51]i103: Detected related package: {ABEF5191-84F0-4346-8B92-276C0E269F58}, scope: PerUser, version: 6.3.0, language: 0 operation: None
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: rtl.msi, state: Obsolete, cached: No, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: bld.msi, state: Obsolete, cached: No, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: cli.msi, state: Obsolete, cached: No, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: dbg.msi, state: Obsolete, cached: No, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: ide.msi, state: Obsolete, cached: No, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: sdk.windows.amd64.msi, state: Present, cached: Yes, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: sdk.windows.arm64.msi, state: Present, cached: Yes, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i101: Detected package: sdk.windows.x86.msi, state: Present, cached: Yes, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i199: Detect complete, result: 0x0, registration state: Full, cached: Yes, eligible for cleanup: No
+[41FC:4854][2026-03-09T17:44:51]i200: Plan begin, 8 packages, action: Repair
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallCLI = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallDBG = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallIDE = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallWindowsSDKAMD64 = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallWindowsSDKARM64 = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i052: Condition 'OptionsInstallWindowsSDKX86 = 1' evaluates to true.
+[41FC:4854][2026-03-09T17:44:51]i000: Setting string variable 'WixBundleLog_sdk.windows.amd64.msi' to value 'C:\GameDev\DeckRPG\swift-6.1.3-repair_000_sdk.windows.amd64.msi.log'
+[41FC:4854][2026-03-09T17:44:51]i000: Setting string variable 'WixBundleLog_sdk.windows.arm64.msi' to value 'C:\GameDev\DeckRPG\swift-6.1.3-repair_001_sdk.windows.arm64.msi.log'
+[41FC:4854][2026-03-09T17:44:51]i000: Setting string variable 'WixBundleLog_sdk.windows.x86.msi' to value 'C:\GameDev\DeckRPG\swift-6.1.3-repair_002_sdk.windows.x86.msi.log'
+[41FC:4854][2026-03-09T17:44:51]i222: Planned rollback boundary: 'WixDefaultBoundary', vital: Yes, transaction: No (default: No)
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: rtl.msi, state: Obsolete, default requested: None, ba requested: None, execute: None, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: No, uncache: No, dependency: Register, expected install registration state: Absent, expected cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: bld.msi, state: Obsolete, default requested: None, ba requested: None, execute: None, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: No, uncache: No, dependency: Register, expected install registration state: Absent, expected cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: cli.msi, state: Obsolete, default requested: None, ba requested: None, execute: None, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: No, uncache: No, dependency: Register, expected install registration state: Absent, expected cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: dbg.msi, state: Obsolete, default requested: None, ba requested: None, execute: None, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: No, uncache: No, dependency: Register, expected install registration state: Absent, expected cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: ide.msi, state: Obsolete, default requested: None, ba requested: None, execute: None, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: No, uncache: No, dependency: Register, expected install registration state: Absent, expected cache registration state: Absent
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: sdk.windows.amd64.msi, state: Present, default requested: Repair, ba requested: Repair, execute: Repair, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: Vital, uncache: No, dependency: Register, expected install registration state: Present, expected cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: sdk.windows.arm64.msi, state: Present, default requested: Repair, ba requested: Repair, execute: Repair, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: Vital, uncache: No, dependency: Register, expected install registration state: Present, expected cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i201: Planned package: sdk.windows.x86.msi, state: Present, default requested: Repair, ba requested: Repair, execute: Repair, rollback: None, default cache strategy: Keep, ba requested strategy: Keep, cache: Vital, uncache: No, dependency: Register, expected install registration state: Present, expected cache registration state: Present
+[41FC:4854][2026-03-09T17:44:51]i299: Plan complete, result: 0x0
+[41FC:4854][2026-03-09T17:44:51]i300: Apply begin
+[41FC:4854][2026-03-09T17:44:51]i370: Session begin, registration key: SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{C4D4837A-7537-4084-92A3-11E7201A66EE}, options: 0x2, disable resume: No
+[41FC:4854][2026-03-09T17:44:51]i320: Registering bundle dependency provider: {C4D4837A-7537-4084-92A3-11E7201A66EE}, version: 6.1.3
+[41FC:4854][2026-03-09T17:44:51]i371: Updating session, registration key: SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{C4D4837A-7537-4084-92A3-11E7201A66EE}, resume: Active, restart initiated: No, disable resume: No
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: sdk.windows.amd64.msi at path: C:\Users\clg11\AppData\Local\Package Cache\{DFE2A8A0-506B-499A-9575-A50E08C631A3}v6.1.3\sdk.windows.amd64.msi.
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: cabGfX1SJuA1_Byjic3r.fwp1ROWuw at path: C:\Users\clg11\AppData\Local\Package Cache\{DFE2A8A0-506B-499A-9575-A50E08C631A3}v6.1.3\sdk.windows.amd64.cab.
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: sdk.windows.arm64.msi at path: C:\Users\clg11\AppData\Local\Package Cache\{EA3E40A8-7BFB-4495-8D5B-EF0310060A63}v6.1.3\sdk.windows.arm64.msi.
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: cab.etnN6R_m99_m4suJb7yU3aJdtw at path: C:\Users\clg11\AppData\Local\Package Cache\{EA3E40A8-7BFB-4495-8D5B-EF0310060A63}v6.1.3\sdk.windows.arm64.cab.
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: sdk.windows.x86.msi at path: C:\Users\clg11\AppData\Local\Package Cache\{D63DFA4A-6311-498B-8F45-62ED4786D3E2}v6.1.3\sdk.windows.x86.msi.
+[41FC:2678][2026-03-09T17:44:51]i304: Verified existing payload: cabJaX0UsbmiD9jBAkjUG_C7xchKGU at path: C:\Users\clg11\AppData\Local\Package Cache\{D63DFA4A-6311-498B-8F45-62ED4786D3E2}v6.1.3\sdk.windows.x86.cab.
+[41FC:4854][2026-03-09T17:44:51]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {451189AF-3328-4336-A301-DD6B939A4C4B}_v6.1.3, package: rtl.msi
+[41FC:4854][2026-03-09T17:44:51]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {5C86ABD8-8EF6-4270-84D4-61749D232A6C}_v6.1.3, package: bld.msi
+[41FC:4854][2026-03-09T17:44:51]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {71A9B626-1857-4335-A3C6-544AB02B972F}_v6.1.3, package: cli.msi
+[41FC:4854][2026-03-09T17:44:51]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {3B1D4647-3F0F-40BA-AC8D-D59FA1659FA4}_v6.1.3, package: dbg.msi
+[41FC:4854][2026-03-09T17:44:51]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {AEAF6878-D483-441B-BBA4-BB1B19D85D49}_v6.1.3, package: ide.msi
+[41FC:4854][2026-03-09T17:44:51]i323: Registering package dependency provider: {DFE2A8A0-506B-499A-9575-A50E08C631A3}_v6.1.3, version: 6.1.3, package: sdk.windows.amd64.msi
+[41FC:4854][2026-03-09T17:44:51]i301: Applying execute package: sdk.windows.amd64.msi, action: Repair, path: C:\Users\clg11\AppData\Local\Package Cache\{DFE2A8A0-506B-499A-9575-A50E08C631A3}v6.1.3\sdk.windows.amd64.msi, arguments: ' INSTALLROOT="C:\Users\clg11\AppData\Local\Programs\Swift" INSTALLREDIST="1" ARPSYSTEMCOMPONENT="1" MSIFASTINSTALL="7" BURNMSIREPAIR=1 REINSTALL=ALL REINSTALLMODE="cmuse" REBOOT=ReallySuppress IGNOREDEPENDENCIES=ALL'
+[41FC:4854][2026-03-09T17:44:56]i319: Applied execute package: sdk.windows.amd64.msi, result: 0x0, restart: None
+[41FC:4854][2026-03-09T17:44:56]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {DFE2A8A0-506B-499A-9575-A50E08C631A3}_v6.1.3, package: sdk.windows.amd64.msi
+[41FC:4854][2026-03-09T17:44:56]i323: Registering package dependency provider: {EA3E40A8-7BFB-4495-8D5B-EF0310060A63}_v6.1.3, version: 6.1.3, package: sdk.windows.arm64.msi
+[41FC:4854][2026-03-09T17:44:56]i301: Applying execute package: sdk.windows.arm64.msi, action: Repair, path: C:\Users\clg11\AppData\Local\Package Cache\{EA3E40A8-7BFB-4495-8D5B-EF0310060A63}v6.1.3\sdk.windows.arm64.msi, arguments: ' INSTALLROOT="C:\Users\clg11\AppData\Local\Programs\Swift" INSTALLREDIST="1" ARPSYSTEMCOMPONENT="1" MSIFASTINSTALL="7" BURNMSIREPAIR=1 REINSTALL=ALL REINSTALLMODE="cmuse" REBOOT=ReallySuppress IGNOREDEPENDENCIES=ALL'
+[41FC:4854][2026-03-09T17:45:01]i319: Applied execute package: sdk.windows.arm64.msi, result: 0x0, restart: None
+[41FC:4854][2026-03-09T17:45:01]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {EA3E40A8-7BFB-4495-8D5B-EF0310060A63}_v6.1.3, package: sdk.windows.arm64.msi
+[41FC:4854][2026-03-09T17:45:01]i323: Registering package dependency provider: {D63DFA4A-6311-498B-8F45-62ED4786D3E2}_v6.1.3, version: 6.1.3, package: sdk.windows.x86.msi
+[41FC:4854][2026-03-09T17:45:01]i301: Applying execute package: sdk.windows.x86.msi, action: Repair, path: C:\Users\clg11\AppData\Local\Package Cache\{D63DFA4A-6311-498B-8F45-62ED4786D3E2}v6.1.3\sdk.windows.x86.msi, arguments: ' INSTALLROOT="C:\Users\clg11\AppData\Local\Programs\Swift" INSTALLREDIST="1" ARPSYSTEMCOMPONENT="1" MSIFASTINSTALL="7" BURNMSIREPAIR=1 REINSTALL=ALL REINSTALLMODE="cmuse" REBOOT=ReallySuppress IGNOREDEPENDENCIES=ALL'
+[41FC:4854][2026-03-09T17:45:05]i319: Applied execute package: sdk.windows.x86.msi, result: 0x0, restart: None
+[41FC:4854][2026-03-09T17:45:05]i325: Registering dependency: {C4D4837A-7537-4084-92A3-11E7201A66EE} on package provider: {D63DFA4A-6311-498B-8F45-62ED4786D3E2}_v6.1.3, package: sdk.windows.x86.msi
+[41FC:4854][2026-03-09T17:45:05]i373: Calculating whether to keep registration
+[41FC:4854][2026-03-09T17:45:05]i374:   package: rtl.msi, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:45:05]i374:   package: bld.msi, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:45:05]i374:   package: cli.msi, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:45:05]i374:   package: dbg.msi, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:45:05]i374:   package: ide.msi, install registration state: Absent, cache registration state: Absent
+[41FC:4854][2026-03-09T17:45:05]i374:   package: sdk.windows.amd64.msi, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:45:05]i374:   package: sdk.windows.arm64.msi, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:45:05]i374:   package: sdk.windows.x86.msi, install registration state: Present, cache registration state: Present
+[41FC:4854][2026-03-09T17:45:05]i372: Session end, registration key: SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{C4D4837A-7537-4084-92A3-11E7201A66EE}, resume: ARP, restart: None, disable resume: No, default registration: Full, ba requested registration: Full
+[41FC:4854][2026-03-09T17:45:05]i371: Updating session, registration key: SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{C4D4837A-7537-4084-92A3-11E7201A66EE}, resume: ARP, restart initiated: No, disable resume: No
+[41FC:4854][2026-03-09T17:45:05]i000: Unsetting variable 'WixStdBARestartRequired'
+[41FC:4854][2026-03-09T17:45:06]i399: Apply complete, result: 0x0, restart: None, ba requested restart:  No
+[41FC:4854][2026-03-09T17:45:06]i500: Shutting down, exit code: 0x0
+[41FC:4854][2026-03-09T17:45:06]i502: Cleanup begin.
+[41FC:4854][2026-03-09T17:45:06]i503: Cleanup not required due to running Apply.
+[41FC:4854][2026-03-09T17:45:06]i599: Cleanup complete, result: 0x0
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: InstallRoot = C:\Users\clg11\AppData\Local\Programs\Swift
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: LocalAppDataFolder = C:\Users\clg11\AppData\Local\
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallAndroidSDKAMD64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallAndroidSDKARM = 0
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallAndroidSDKARM64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallAndroidSDKX86 = 0
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallBLD = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallCLI = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallDBG = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallIDE = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallRTL = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallUtilities = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsRedistAMD64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsRedistARM64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsRedistX86 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsSDKAMD64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsSDKARM64 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: OptionsInstallWindowsSDKX86 = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: RebootPending = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleAction = 8
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleCommandLineAction = 8
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleElevated = 0
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleFileVersion = 6.1.3.0
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleInProgressName = 
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleInstalled = 1
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleLog = C:\GameDev\DeckRPG\swift-6.1.3-repair.log
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleLog_sdk.windows.amd64.msi = C:\GameDev\DeckRPG\swift-6.1.3-repair_000_sdk.windows.amd64.msi.log
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleLog_sdk.windows.arm64.msi = C:\GameDev\DeckRPG\swift-6.1.3-repair_001_sdk.windows.arm64.msi.log
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleLog_sdk.windows.x86.msi = C:\GameDev\DeckRPG\swift-6.1.3-repair_002_sdk.windows.x86.msi.log
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleManufacturer = swift.org
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleName = Swift Developer Toolkit 6.1.3
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleOriginalSource = C:\Users\clg11\Downloads\swift-6.1.3-RELEASE-windows10.exe
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleOriginalSourceFolder = C:\Users\clg11\Downloads\
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleProviderKey = {C4D4837A-7537-4084-92A3-11E7201A66EE}
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleSourceProcessFolder = C:\Users\clg11\AppData\Local\Package Cache\{C4D4837A-7537-4084-92A3-11E7201A66EE}\
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleSourceProcessPath = C:\Users\clg11\AppData\Local\Package Cache\{C4D4837A-7537-4084-92A3-11E7201A66EE}\installer.exe
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleTag = 
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleUILevel = 3
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixBundleVersion = 6.1.3
+[41FC:4854][2026-03-09T17:45:06]i410: Variable: WixCanRestart = 1
+[41FC:4854][2026-03-09T17:45:06]i007: Exit code: 0x0, restarting: No

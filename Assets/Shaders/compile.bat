@@ -1,5 +1,19 @@
-glslangValidator.exe -V shader.vert
-glslangValidator.exe -V shader.frag
-glslc.exe shader.vert -o vert.spv
-glslc.exe shader.frag -o frag.spv
-pause
+@echo off
+setlocal
+
+echo Compiling Vulkan shaders...
+
+glslc shader.vert -o vert.spv || goto :error
+glslc shader.frag -o frag.spv || goto :error
+glslc shader2d.vert -o shader2d_vert.spv || goto :error
+glslc shader2d.frag -o shader2d_frag.spv || goto :error
+glslc ui.vert -o ui_vert.spv || goto :error
+glslc ui.frag -o ui_frag.spv || goto :error
+glslc ui_sdf.frag -o ui_sdf.spv || goto :error
+
+echo All shaders compiled successfully.
+exit /b 0
+
+:error
+echo Shader compilation failed.
+exit /b 1

@@ -1,6 +1,7 @@
 import Core
 import Graphics
 import Core
+import Math
 //Simple styling system for ui elements
 //Start basic, expand as needed
 public struct Style {
@@ -17,6 +18,14 @@ public struct Style {
     public var cornerRadius: Float = 0
 
     public var fontSize: Float = 14
+    public var textWeight: Float = 0
+    public var textOutlineWidth: Float = 0
+    public var textOutlineColor: Color = .black
+    public var textShadowOffset: Vector2 = Vector2(0, 0)
+    public var textShadowColor: Color = Color(0, 0, 0, 0)
+    public var textGlowStrength: Float = 0
+    public var textGlowColor: Color = Color(255, 255, 255, 0)
+    public var textGlowSpeed: Float = 2.0
     //public var font: Font? = nil  //add when i have font system
 
     public init() {}

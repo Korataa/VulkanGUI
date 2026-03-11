@@ -111,6 +111,62 @@ swift build
 swift run DeckRPG
 ```
 
+## One-Command Run Helper (Windows)
+
+Use the helper script to build, stage `SDL3.dll`, and run the game:
+
+```powershell
+cd C:\GameDev\DeckRPG
+powershell -ExecutionPolicy Bypass -File .\scripts\run-windows.ps1
+```
+
+Run from any current directory:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\run-anywhere.ps1
+```
+
+Useful switches:
+
+```powershell
+# Build + stage DLL, but do not launch
+powershell -ExecutionPolicy Bypass -File .\scripts\run-windows.ps1 -NoRun
+
+# Stage + run without rebuilding
+powershell -ExecutionPolicy Bypass -File .\scripts\run-windows.ps1 -SkipBuild
+
+# Same as above, but callable from anywhere
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\run-anywhere.ps1 -SkipBuild
+```
+
+## One-Command Build Helper (Windows)
+
+Build from any current directory without path issues:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\build-windows.ps1
+```
+
+Release build:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\build-windows.ps1 -Configuration release
+```
+
+## Safe Swift Run (Windows)
+
+If `swift run` crashes with duplicate `vcruntime` module paths (typically caused by mixed path casing like `DeckRPG` vs `Deckrpg`), use the safe wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\swift-run-safe.ps1
+```
+
+Pass through normal `swift run` arguments:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\GameDev\DeckRPG\scripts\swift-run-safe.ps1 --skip-build DeckRPG
+```
+
 ## Troubleshooting
 
 ### Swift Installation Issues

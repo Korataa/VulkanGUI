@@ -14,29 +14,95 @@ public class UIRenderable {
     public var size: SIMD2<Float>
     public var color: Color
     public var textureID: UInt32?
+    public var usesSDF: Bool
+    public var sdfThreshold: Float
+    public var sdfRange: Float
+    public var outlineWidth: Float
+    public var outlineColor: Color
+    public var baseOutlineWidth: Float
+    public var glowStrength: Float
+    public var glowSpeed: Float
+    public var glowColor: Color
+    public var glowWidth: Float
+    public var shadowColor: Color
+    public var shadowOffset: SIMD2<Float>
+    public var reserved2: Float = 0.0 // MSDF selector for shader
     public var vertices: [Vertex2D]  // TODO: Could be optimized to GPU-only for static elements
     public var indices: [UInt32]
-    
+
     // Smart caching system - same pattern as Mesh (store offsets, not BufferRegion)
     private var _isDirty: Bool = true
     private var _isUploaded: Bool = false
-    
+
     // Buffer offsets (like Mesh does it)
     internal var vertexOffset: Int = 0
     internal var indexOffset: Int = 0
-    
+
     public var isDirty: Bool { return _isDirty }
     public var isUploaded: Bool { return _isUploaded }
-    
-    public init(position: SIMD2<Float>, size: SIMD2<Float>, color: Color = Color.white, textureID: UInt32? = nil) {
+
+    public init(position: SIMD2<Float>, size: SIMD2<Float>, color: Color = Color.white, textureID: UInt32? = nil, usesSDF: Bool = false, sdfThreshold: Float = 0.5, sdfRange: Float = 4.0, outlineWidth: Float = 0.0, outlineColor: Color = .black, glowStrength: Float = 0.0, glowSpeed: Float = 0.0, glowColor: Color = Color(255,255,255,0), glowWidth: Float = 0.0, shadowColor: Color = Color(0,0,0,0), shadowOffset: SIMD2<Float> = SIMD2<Float>(0,0)) {
         self.position = position
         self.size = size
         self.color = color
         self.textureID = textureID
-        
+        self.usesSDF = usesSDF
+        self.sdfThreshold = sdfThreshold
+        self.sdfRange = sdfRange
+        self.outlineWidth = outlineWidth
+        self.outlineColor = outlineColor
+        self.baseOutlineWidth = outlineWidth
+        self.glowStrength = glowStrength
+        self.glowSpeed = glowSpeed
+        self.glowColor = glowColor
+        self.glowWidth = glowWidth
+        self.shadowColor = shadowColor
+        self.shadowOffset = shadowOffset
+        self.reserved2 = 0.0
         // Create a quad (2 triangles)
         self.vertices = UIRenderable.createQuadVertices(position: position, size: size, color: color)
         self.indices = [0, 1, 2, 0, 2, 3]  // Two triangles forming a quad
+    }
+
+    public init(
+        position: SIMD2<Float>,
+        size: SIMD2<Float>,
+        color: Color = Color.white,
+        textureID: UInt32? = nil,
+        usesSDF: Bool = false,
+        sdfThreshold: Float = 0.5,
+        sdfRange: Float = 4.0,
+        outlineWidth: Float = 0.0,
+        outlineColor: Color = .black,
+        glowStrength: Float = 0.0,
+        glowSpeed: Float = 0.0,
+        glowColor: Color = Color(255,255,255,0),
+        glowWidth: Float = 0.0,
+        shadowColor: Color = Color(0,0,0,0),
+        shadowOffset: SIMD2<Float> = SIMD2<Float>(0,0),
+        vertices: [Vertex2D],
+        indices: [UInt32],
+        reserved2: Float = 0.0
+    ) {
+        self.position = position
+        self.size = size
+        self.color = color
+        self.textureID = textureID
+        self.usesSDF = usesSDF
+        self.sdfThreshold = sdfThreshold
+        self.sdfRange = sdfRange
+        self.outlineWidth = outlineWidth
+        self.outlineColor = outlineColor
+        self.baseOutlineWidth = outlineWidth
+        self.glowStrength = glowStrength
+        self.glowSpeed = glowSpeed
+        self.glowColor = glowColor
+        self.glowWidth = glowWidth
+        self.shadowColor = shadowColor
+        self.shadowOffset = shadowOffset
+        self.vertices = vertices
+        self.indices = indices
+        self.reserved2 = reserved2
     }
     
     /// Create vertices for a quad
