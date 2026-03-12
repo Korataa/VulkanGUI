@@ -68,6 +68,7 @@ void main() {
     float shadowPxRange = computeScreenPxRange(shadowUV, uiMaterial.sdfRange);
     float shadowAlpha = clamp(shadowPxRange * (shadowDist - (edge - sharpness)) + 0.5, 0.0, 1.0);
 
+    // Restore SDF/MSDF logic, but debug output vertexColor and alpha
     vec3 fillColor = vertexColor.rgb;
     vec3 outlineColor = uiMaterial.outlineColor.rgb;
 
@@ -82,6 +83,20 @@ void main() {
     color = mix(uiMaterial.shadowColor.rgb, color, alpha);
     alpha = max(alpha, shadowAlpha * uiMaterial.shadowColor.a);
 
-    outColor = vec4(color * vertexColor.rgb, alpha * vertexColor.a);
+    vec3 fillColor = vertexColor.rgb;
+    vec3 outlineColor = uiMaterial.outlineColor.rgb;
+
+    vec3 color = outlineColor * outlineRegion + fillColor * fillAlpha;
+    float alpha = max(fillAlpha, outlineRegion);
+
+    // Add glow
+    color = mix(color, uiMaterial.glowColor.rgb, glow * uiMaterial.glowColor.a);
+    alpha = max(alpha, glow * uiMaterial.glowColor.a);
+
+    // Add drop shadow (drawn behind text)
+    color = mix(uiMaterial.shadowColor.rgb, color, alpha);
+    alpha = max(alpha, shadowAlpha * uiMaterial.shadowColor.a);
+
+    outColor = vec4(color, alpha * vertexColor.a);
     return;
 }
