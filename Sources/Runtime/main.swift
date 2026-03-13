@@ -64,7 +64,6 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     graphics.addModel(model: model)
     print("Model loaded successfully!")
     
-    // Restore original UI DSL style with colored backgrounds
     let hpText = Text("HP: 100")
         .background(.red)
         .fontSize(32)
