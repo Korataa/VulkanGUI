@@ -49,7 +49,9 @@ void main() {
     vec4 sampleValue = texture(uiTexture, texCoords);
     float distance = median3(sampleValue.rgb);
 
+    // Compute screen-space pixel range for SDF smoothing; ensure a reasonable minimum
     float pxRange = computeScreenPxRange(texCoords, uiMaterial.sdfRange);
+    pxRange = max(pxRange, 4.0);
 
     float edge = 0.5;
     float sharpness = clamp(pxRange * 0.25, 0.0, 0.1);
@@ -68,35 +70,41 @@ void main() {
     float shadowPxRange = computeScreenPxRange(shadowUV, uiMaterial.sdfRange);
     float shadowAlpha = clamp(shadowPxRange * (shadowDist - (edge - sharpness)) + 0.5, 0.0, 1.0);
 
-    // Restore SDF/MSDF logic, but debug output vertexColor and alpha
-    vec3 fillColor = vertexColor.rgb;
-    vec3 outlineColor = uiMaterial.outlineColor.rgb;
 
-    vec3 color = outlineColor * outlineRegion + fillColor * fillAlpha;
-    float alpha = max(fillAlpha, outlineRegion);
+    // Normalize CPU-side colors (Color is stored 0..255 on the CPU)
+    vec3 vertexCol = vertexColor.rgb / 255.0;
+    float vertexA = vertexColor.a / 255.0;
 
-    // Add glow
-    color = mix(color, uiMaterial.glowColor.rgb, glow * uiMaterial.glowColor.a);
-    alpha = max(alpha, glow * uiMaterial.glowColor.a);
+    vec3 tint = uiMaterial.tint.rgb / 255.0;
+    float tintA = uiMaterial.tint.a / 255.0;
+    vec3 outlineCol = uiMaterial.outlineColor.rgb / 255.0;
+    vec3 glowCol = uiMaterial.glowColor.rgb / 255.0;
+    vec3 shadowCol = uiMaterial.shadowColor.rgb / 255.0;
 
-    // Add drop shadow (drawn behind text)
-    color = mix(uiMaterial.shadowColor.rgb, color, alpha);
-    alpha = max(alpha, shadowAlpha * uiMaterial.shadowColor.a);
+    // Compose base color (vertex color modulated by material tint)
+    vec3 baseColor = vertexCol * tint;
 
-    vec3 fillColor = vertexColor.rgb;
-    vec3 outlineColor = uiMaterial.outlineColor.rgb;
+    // Shadow sits behind the glyph; shadowAlpha computed from a displaced sample
+    float shadowContribution = shadowAlpha * (1.0 - fillAlpha);
 
-    vec3 color = outlineColor * outlineRegion + fillColor * fillAlpha;
-    float alpha = max(fillAlpha, outlineRegion);
+    // Glow contributes outside the glyph; scaled down where the fill exists
+    float glowContribution = glow * (1.0 - fillAlpha);
 
-    // Add glow
-    color = mix(color, uiMaterial.glowColor.rgb, glow * uiMaterial.glowColor.a);
-    alpha = max(alpha, glow * uiMaterial.glowColor.a);
+    // Outline region where outline exists outside the fill
+    float outlineContribution = outlineRegion;
 
-    // Add drop shadow (drawn behind text)
-    color = mix(uiMaterial.shadowColor.rgb, color, alpha);
-    alpha = max(alpha, shadowAlpha * uiMaterial.shadowColor.a);
+    // Final alpha should reflect any visible components (fill or outline)
+    float finalMask = max(fillAlpha, outlineContribution);
+    float finalAlpha = finalMask * vertexA * uiMaterial.opacity * tintA;
 
-    outColor = vec4(color, alpha * vertexColor.a);
-    return;
+    // Accumulate color layers: shadow (behind), outline, fill, then glow (additive-ish)
+    vec3 color = vec3(0.0);
+    color += shadowCol * shadowContribution * uiMaterial.opacity;
+    color += outlineCol * outlineContribution * uiMaterial.opacity;
+    color += baseColor * fillAlpha * uiMaterial.opacity;
+    color += glowCol * glowContribution * uiMaterial.opacity * 0.5; // tone down glow a bit
+
+    color = clamp(color, 0.0, 1.0);
+
+    outColor = vec4(color, finalAlpha);
 }

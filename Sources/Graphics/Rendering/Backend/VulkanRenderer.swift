@@ -135,7 +135,14 @@ class VulkanRenderer {
         sdfRange: 4.0,
         reserved1: 0.0,
         reserved2: 0.0,
-        pad1: 0.0
+        pad1: 0.0,
+        glowColor: Color(255,255,255,0),
+        glowWidth: 0.0,
+        pad2: 0.0,
+        shadowColor: Color(0,0,0,0),
+        shadowOffset: Vector2(0,0),
+        pad3: 0.0,
+        pad4: 0.0
     )
     private var currentUITextureIndex: Int? = nil
     private var uiTextUsesMSDF: Bool = false

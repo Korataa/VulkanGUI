@@ -69,6 +69,7 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
         .background(.red)
         .fontSize(32)
         .textColor(.white)
+        .textShadow(offset: Vector2(1, -1), color: Color(0, 0, 0, 128))
     let scoreText = Text("Score: 0")
         .background(.green)
         .fontSize(32)

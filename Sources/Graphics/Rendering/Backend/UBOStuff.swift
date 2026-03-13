@@ -60,4 +60,12 @@ struct UIMaterialConstants {
     var reserved1: Float       // Reserved for future use
     var reserved2: Float       // Reserved for future use
     var pad1: Float            // Struct size alignment padding
+    // Additional UI material params (match GLSL UIMaterial layout)
+    var glowColor: Color       // vec4 glow color
+    var glowWidth: Float       // glow width
+    var pad2: Float            // padding
+    var shadowColor: Color     // vec4 shadow color
+    var shadowOffset: Vector2  // vec2 shadow offset
+    var pad3: Float            // padding to align to 16 bytes
+    var pad4: Float            // extra padding
 }

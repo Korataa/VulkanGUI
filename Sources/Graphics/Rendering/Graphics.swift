@@ -259,10 +259,17 @@ public class Graphics {
     ) {
         guard !elements.isEmpty else { return }
 
-        // For solid color UI (text, rectangles) and SDF text, use the color of the first element as tint
+        // For solid UI and SDF text, pick a sensible batch tint.
+        // Avoid accidentally picking a shadow-renderable's color as the batch tint
+        // (shadow renderables are separate glyphs but may be batched together). Prefer
+        // the first element whose color differs from its shadowColor (likely the main glyph).
         var tint: Color = .white
-        if (textureMode == 0 || textureMode == 3), let first = elements.first {
-            tint = first.color
+        if (textureMode == 0 || textureMode == 3), !elements.isEmpty {
+            if let preferred = elements.first(where: { $0.color != $0.shadowColor }) {
+                tint = preferred.color
+            } else if let first = elements.first {
+                tint = first.color
+            }
         }
 
         renderer.setUIMaterial(
