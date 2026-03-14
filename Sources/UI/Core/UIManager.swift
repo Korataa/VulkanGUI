@@ -232,7 +232,7 @@ public class UIManager {
                         glyphs[index].baseOutlineWidth = max(0.0, outlineWidth);
                         glyphs[index].glowStrength = glowStrength;
                         glyphs[index].glowSpeed = glowSpeed;
-                        glyphs[index].reserved2 = 1.0; // Ensure MSDF path is used
+                        glyphs[index].reserved2 = 1.0 // Ensure MSDF path is used
                     }
                 }
 
