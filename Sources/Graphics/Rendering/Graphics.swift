@@ -16,7 +16,7 @@ public class Graphics {
 
     private struct OrderedBatch<Key: Hashable> {
         let key: Key
-        var elements: [UIRenderable]
+        var elements: [Renderable2D]
     }
 
     // Struct to bundle info for ResourceSystem
@@ -57,7 +57,7 @@ public class Graphics {
     }
 
     var renderModels: [Model] = []        //Models to render
-    private var uiElements: [UIRenderable] = []      //UI elements to render
+    private var uiElements: [Renderable2D] = []      //UI elements to render
     private var debugPrinted = false     // Only print debug info once
     
     /// Public accessor for UI elements count
@@ -159,12 +159,12 @@ public class Graphics {
     }
     
     /// Add a UI element to be rendered every frame
-    public func addUIElement(_ renderable: UIRenderable) {
+    public func addUIElement(_ renderable: Renderable2D) {
         uiElements.append(renderable)
     }
     
     /// Remove a UI element from rendering
-    public func removeUIElement(_ renderable: UIRenderable) {
+    public func removeUIElement(_ renderable: Renderable2D) {
         uiElements.removeAll { $0 === renderable }
     }
     
@@ -230,7 +230,7 @@ public class Graphics {
         }
     }
 
-    private func orderedBatches<Key: Hashable>(from elements: [UIRenderable], keySelector: (UIRenderable) -> Key) -> [OrderedBatch<Key>] {
+    private func orderedBatches<Key: Hashable>(from elements: [Renderable2D], keySelector: (Renderable2D) -> Key) -> [OrderedBatch<Key>] {
         var ordered: [OrderedBatch<Key>] = []
         var indexByKey: [Key: Int] = [:]
 
@@ -248,7 +248,7 @@ public class Graphics {
     }
 
     private func renderUIBatch(
-        elements: [UIRenderable],
+        elements: [Renderable2D],
         pipeline: Pipeline,
         textureMode: Int32,
         textureID: UInt32?,
@@ -300,7 +300,7 @@ public class Graphics {
     /// - Dynamic UI (health bars, animations) -> use current approach
     /// - Semi-dynamic UI (text) -> hybrid approach with change detection
     /// Only optimize if UI becomes a bottleneck (very unlikely in 3D games)
-    private func uploadUIElements(_ renderables: [UIRenderable]) {
+    private func uploadUIElements(_ renderables: [Renderable2D]) {
         guard !renderables.isEmpty else { return }
 
         print("📤 Uploading \(renderables.count) dynamic UI elements")
@@ -324,8 +324,8 @@ public class Graphics {
     }
     
     /// Create a simple 2D sprite/quad - convenience method
-    public func createSprite(at position: (Float, Float), size: (Float, Float), color: Color = Color.white, textureID: UInt32? = nil) -> UIRenderable {
-        return UIRenderable(position: SIMD2(position.0, position.1), 
+    public func createSprite(at position: (Float, Float), size: (Float, Float), color: Color = Color.white, textureID: UInt32? = nil) -> Renderable2D {
+        return Renderable2D(position: SIMD2(position.0, position.1), 
                            size: SIMD2(size.0, size.1), 
                            color: color, 
                            textureID: textureID)

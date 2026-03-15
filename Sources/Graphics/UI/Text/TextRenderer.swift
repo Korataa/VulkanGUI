@@ -30,7 +30,7 @@ public struct TextRenderer {
 		textureID: UInt32,
 		scale: Float = 1.0,
 		lineSpacing: Float = 1.0
-	) -> [UIRenderable] {
+	) -> [Renderable2D] {
 		guard !text.isEmpty else { return [] }
 
 		let scaledFontSize = atlas.fontSize * scale
@@ -38,7 +38,7 @@ public struct TextRenderer {
 
 		var penX = topLeft.x
 		var penY = topLeft.y
-		var renderables: [UIRenderable] = []
+		var renderables: [Renderable2D] = []
 		renderables.reserveCapacity(text.count)
 
 		for character in text {
@@ -80,7 +80,7 @@ public struct TextRenderer {
 
 			let center = SIMD2((x0 + x1) * 0.5, (y0 + y1) * 0.5)
 			let size = SIMD2(width, height)
-			let renderable = UIRenderable(
+					let renderable = Renderable2D(
 				position: center,
 				size: size,
 				color: color,

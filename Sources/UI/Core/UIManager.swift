@@ -10,7 +10,7 @@ public class UIManager {
     private var screenBounds: Rectangle = Rectangle(position: Vector2(0, 0), width: 800, height: 600)
     private var uiTimeSeconds: Float = 0.0
     private var hasInitializedUI: Bool = false
-    private var cachedRenderables: [UIRenderable] = []
+    private var cachedRenderables: [Renderable2D] = []
     private var hasAnimatedTextGlow: Bool = false
     private var textRenderer: TextRenderer?
     private var sdfTextureID: UInt32?
@@ -72,7 +72,7 @@ public class UIManager {
         print("[UI DEBUG] UI update complete!")
     }
 
-    private func renderablesEqual(_ a: [UIRenderable], _ b: [UIRenderable]) -> Bool {
+    private func renderablesEqual(_ a: [Renderable2D], _ b: [Renderable2D]) -> Bool {
         guard a.count == b.count else { return false }
         for (i, renderable) in a.enumerated() {
             let other = b[i]
@@ -91,10 +91,10 @@ public class UIManager {
         return true
     }
 
-    private func reuseCompatibleRenderables(_ existing: [UIRenderable], _ new: [UIRenderable]) -> [UIRenderable] {
+    private func reuseCompatibleRenderables(_ existing: [Renderable2D], _ new: [Renderable2D]) -> [Renderable2D] {
         guard existing.count == new.count else { return new }
-        
-        var reused: [UIRenderable] = []
+
+        var reused: [Renderable2D] = []
         for (i, newRenderable) in new.enumerated() {
             let existingRenderable = existing[i]
             
@@ -182,14 +182,14 @@ public class UIManager {
     }
     
     /// Convert layouted elements to UIRenderables
-    private func generateRenderables(from element: Element) -> [UIRenderable] {
-        var renderables: [UIRenderable] = []
+    private func generateRenderables(from element: Element) -> [Renderable2D] {
+        var renderables: [Renderable2D] = []
         
         // Generate renderable for this element
         print("🎨 Generating renderable for element: \(element.elementType), bounds: \(element.bounds), backgroundColor: \(String(describing: element.style.backgroundColor))")
         switch element.elementType {
         case .rect(let color, let textureID):
-            let renderable = UIRenderable(
+            let renderable = Renderable2D(
                 position: SIMD2(element.bounds.center.x, element.bounds.center.y),
                 size: SIMD2(element.bounds.width, element.bounds.height),
                 color: color,
@@ -200,7 +200,7 @@ public class UIManager {
         case .text(let content, let font):
 
             if let bg = element.style.backgroundColor {
-                renderables.append(UIRenderable(
+                renderables.append(Renderable2D(
                     position: SIMD2(element.bounds.center.x, element.bounds.center.y),
                     size: SIMD2(element.bounds.width, element.bounds.height),
                     color: bg,
@@ -223,7 +223,7 @@ public class UIManager {
                     hasAnimatedTextGlow = true
                 }
 
-                func applyTextMaterial(_ glyphs: inout [UIRenderable], outlineWidth: Float, outlineColor: Color, threshold: Float, range: Float, glowStrength: Float, glowSpeed: Float) {
+                func applyTextMaterial(_ glyphs: inout [Renderable2D], outlineWidth: Float, outlineColor: Color, threshold: Float, range: Float, glowStrength: Float, glowSpeed: Float) {
                     for index in glyphs.indices {
                         glyphs[index].sdfThreshold = 0.5; // Force for debug
                         glyphs[index].sdfRange = 4.0;      // Force for debug
@@ -236,7 +236,7 @@ public class UIManager {
                     }
                 }
 
-                var shadowRenderables: [UIRenderable] = []
+                    var shadowRenderables: [Renderable2D] = []
                 if element.style.textShadowColor.a > 0 {
                     let shadowStart = SIMD2(
                         startX + element.style.textShadowOffset.x,
@@ -266,7 +266,7 @@ public class UIManager {
                     )
                 }
 
-                var glowRenderables: [UIRenderable] = []
+                    var glowRenderables: [Renderable2D] = []
                 if glowStrength > 0.0 {
                     let animatedGlow = useAnimatedTextGlow
                         ? (sin(uiTimeSeconds * glowSpeed * 6.28318) * 0.5 + 0.5) * glowStrength
@@ -345,7 +345,7 @@ public class UIManager {
             } else {
                 // Fallback path while SDF resources are unavailable.
                 let color = element.style.textColor
-                let renderable = UIRenderable(
+                let renderable = Renderable2D(
                     position: SIMD2(element.bounds.center.x, element.bounds.center.y),
                     size: SIMD2(element.bounds.width, element.bounds.height),
                     color: color,
@@ -362,7 +362,7 @@ public class UIManager {
             // Custom renderer - convert Quads to UIRenderables
             let quads = renderer(element)
             for quad in quads {
-                let renderable = UIRenderable(
+                let renderable = Renderable2D(
                     position: SIMD2(quad.position.x, quad.position.y),
                     size: SIMD2(quad.size.x, quad.size.y),
                     color: quad.color,

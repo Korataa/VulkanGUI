@@ -3185,7 +3185,7 @@ same here 0       1
 
     /// Render UI elements from already-uploaded buffer data (NO memory allocation)
     /// This is the CLEAN rendering method that uses cached GPU data
-    func renderUploadedUIElements(_ elements: [UIRenderable]) {
+    func renderUploadedUIElements(_ elements: [Renderable2D]) {
         guard !elements.isEmpty else { 
             print("📦 No uploaded UI elements to render")
             return 

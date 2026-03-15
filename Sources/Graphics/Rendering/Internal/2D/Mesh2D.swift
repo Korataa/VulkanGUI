@@ -3,9 +3,18 @@ import Core
 import Foundation
 import Cvulkan
 
-/// MeshUI - 2D mesh for UI elements (screen-space)
+/// Mesh2D - lightweight GPU draw descriptor for 2D elements (screen-space).
+///
+/// Contract:
+/// - `Mesh2D` is a minimal descriptor used at draw time. It contains offsets and counts
+///   (vertex/index offsets and counts, stride, primitive type) and a material ID.
+/// - `Mesh2D` does not own vertex/index data. It is typically constructed from a
+///   `Renderable2D` after the renderable has been uploaded and its buffer offsets set.
+/// - Do not attempt to access GPU data through a `Mesh2D` if the source renderable hasn't
+///   been uploaded yet.
+///
 /// Mirrors Mesh but uses Vertex2D and screen coordinates
-public final class MeshUI {
+public final class Mesh2D {
     public var name: String?
     
     var vertexOffset: Int
@@ -34,8 +43,8 @@ public final class MeshUI {
         self.materialID = materialID
     }
     
-    /// Create MeshUI from UIRenderable data
-    public convenience init(from renderable: UIRenderable) {
+    /// Create Mesh2D from Renderable2D data
+    public convenience init(from renderable: Renderable2D) {
         self.init(
             vertexOffset: renderable.vertexOffset,
             vertexCount: renderable.vertices.count,

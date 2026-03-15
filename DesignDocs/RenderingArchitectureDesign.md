@@ -202,7 +202,7 @@ public class Model {
 
 ```swift
 public final class ModelUI {
-    public var meshes: [MeshUI] = []         // 2D geometry (Vertex2D)
+    public var meshes: [Mesh2D] = []         // 2D geometry (Vertex2D)
     public var materials: [Material] = []     // UI materials
     public var transform: Transform          // Screen-space transform (usually identity)
 }

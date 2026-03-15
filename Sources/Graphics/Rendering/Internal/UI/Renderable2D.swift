@@ -2,14 +2,17 @@ import Platform
 import Core
 import Foundation
 
-/// Represents a 2D UI element or sprite that can be rendered
-/// 
-/// TODO: Memory optimization - Currently stores vertices on both CPU and GPU for flexibility.
-/// This is fine for most games (UI data is tiny compared to 3D models), but could be optimized later:
-/// - Static UI elements could store GPU offsets only (like static 3D models)
-/// - Dynamic UI could use a write-only GPU buffer approach
-/// - Only optimize if UI becomes a performance bottleneck (unlikely in 3D games)
-public class UIRenderable {
+/// Represents a 2D UI element or sprite that can be rendered.
+///
+/// Contract / lifecycle:
+/// - This is the canonical CPU-side renderable. It stores per-element geometry (vertices/indices),
+///   color/texture/SDF/material parameters and upload state (isDirty/isUploaded).
+/// - When uploaded, the renderer records GPU buffer offsets via `markUploaded(vertexOffset:indexOffset:)`.
+///   At that point a `Mesh2D` may be constructed from the renderable and used for drawing.
+/// - If 2D buffers are reset, call `markNotUploaded()` so the element will be re-uploaded before rendering.
+///
+/// Same structure as the old UIRenderable but renamed to be consistent with Mesh2D.
+public class Renderable2D {
     public var position: SIMD2<Float>
     public var size: SIMD2<Float>
     public var color: Color
@@ -60,7 +63,7 @@ public class UIRenderable {
         self.shadowOffset = shadowOffset
         self.reserved2 = 0.0
         // Create a quad (2 triangles)
-        self.vertices = UIRenderable.createQuadVertices(position: position, size: size, color: color)
+        self.vertices = Renderable2D.createQuadVertices(position: position, size: size, color: color)
         self.indices = [0, 1, 2, 0, 2, 3]  // Two triangles forming a quad
     }
 
@@ -132,7 +135,7 @@ public class UIRenderable {
         if let newSize = size { self.size = newSize }
         
         // Recreate vertices with new transform
-        self.vertices = UIRenderable.createQuadVertices(position: self.position, size: self.size, color: self.color)
+        self.vertices = Renderable2D.createQuadVertices(position: self.position, size: self.size, color: self.color)
         
         // Mark dirty for next frame
         markDirty()

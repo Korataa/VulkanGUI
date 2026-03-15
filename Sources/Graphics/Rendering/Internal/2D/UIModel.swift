@@ -6,16 +6,16 @@ import Foundation
 /// ModelUI - UI models in screen space (mirrors Model3D architecture)
 /// Uses Vertex2D and 2D buffers but with screen-space coordinates
 public final class ModelUI {
-    public var meshes: [MeshUI] = []
+    public var meshes: [Mesh2D] = []
     public var materials: [Material] = [] // Simple material system for UI
     public var transform: Transform       // Screen-space transform (usually identity)
     
-    /// Create ModelUI from UIRenderable elements
-    public init(from renderables: [UIRenderable]) {
-        // Convert UIRenderables to MeshUI objects
+    /// Create ModelUI from Renderable2D elements
+    public init(from renderables: [Renderable2D]) {
+        // Convert Renderable2D to Mesh2D objects
         self.meshes = renderables.compactMap { renderable in
             guard renderable.isUploaded else { return nil }
-            return MeshUI(from: renderable)
+            return Mesh2D(from: renderable)
         }
         
         // UI uses identity transform (already positioned in screen space)
@@ -29,8 +29,8 @@ public final class ModelUI {
         self.materials = []
     }
     
-    /// Create ModelUI from a single UIRenderable
-    public convenience init(from renderable: UIRenderable) {
+    /// Create ModelUI from a single Renderable2D
+    public convenience init(from renderable: Renderable2D) {
         self.init(from: [renderable])
     }
     
