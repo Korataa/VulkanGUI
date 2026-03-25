@@ -1,0 +1,11 @@
+public protocol InputProvider {
+    //Mouse
+    var mousePosition: (x: Float, y: Float) { get }
+    func isMouseButtonDown(_ button: Int) -> Bool
+
+    //Keyboard
+    func isKeyDown(_ keyCode: Int) -> Bool
+
+    //Polling (maybe we wont use this? idk)
+    func update()
+}
