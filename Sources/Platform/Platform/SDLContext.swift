@@ -27,7 +27,12 @@ public class SDLContext {
     public init() {}
 
     public func initialize() {
-        //sdl specific initialization
+        // Prefer raw/unaccelerated input where available (set hints before SDL_Init)
+        // Use literal hint names to avoid depending on binding constants.
+        SDL_SetHint("SDL_HINT_WINDOWS_RAW_KEYBOARD", "1")
+        SDL_SetHint("SDL_HINT_JOYSTICK_RAWINPUT", "1")
+
+        // sdl specific initialization
         if !SDL_Init(SDL_INIT_VIDEO) {
             fatalError("SDL Error: \(String(cString: SDL_GetError()))")
         }
@@ -88,6 +93,21 @@ public class SDLContext {
 
     public func getWindowSizeInPixels(width: inout Int32, height: inout Int32) {
         SDL_GetWindowSizeInPixels(windowHandle, &width, &height)
+    }
+
+    // Runtime helpers to prefer raw input via SDL hints (some hints must be set before init).
+    public func setWindowsRawKeyboardPreferred(_ enabled: Bool) {
+        SDL_SetHint("SDL_HINT_WINDOWS_RAW_KEYBOARD", enabled ? "1" : "0")
+    }
+
+    public func setJoystickRawInputPreferred(_ enabled: Bool) {
+        SDL_SetHint("SDL_HINT_JOYSTICK_RAWINPUT", enabled ? "1" : "0")
+    }
+
+    // Set relative mouse mode for the current window (captures cursor and provides deltas).
+    // Uses the SDL_SetWindowRelativeMouseMode binding which accepts the window handle and a Bool.
+    public func setWindowRelativeMouseMode(_ enabled: Bool) {
+        SDL_SetWindowRelativeMouseMode(windowHandle, enabled)
     }
 
     public func setWindowMinimize(minimize: Bool) {

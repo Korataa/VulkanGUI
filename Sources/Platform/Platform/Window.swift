@@ -26,6 +26,8 @@ public class Window {
         self.height = height
 
         sdlContext.setWindowHandle(sdlWindow: windowHandle)
+        // Enable relative mouse mode for this window by default (captures cursor)
+        sdlContext.setWindowRelativeMouseMode(true)
     }
 
     func cleanup() {

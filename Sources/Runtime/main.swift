@@ -25,6 +25,10 @@ sdlContext.initialize()
 let window = Window(sdlContext: sdlContext)
 window.createWindow(title: "CardRPG", width: 800, height: 600)
 
+// Create SDL input provider and enable relative/raw polling mode
+let inputProvider = SDLInputProvider()
+inputProvider.setRelativeMode(true)
+
 //----------------------------------------Init subsystems here-----------------------------------------------------
 
 // Create event manager for input handling
