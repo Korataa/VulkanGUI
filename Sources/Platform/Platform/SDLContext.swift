@@ -48,7 +48,7 @@ public class SDLContext {
         self.windowHandle = sdlWindow
     }
 
-    func getWindowHandle() -> OpaquePointer? {
+    public func getWindowHandle() -> OpaquePointer? {
         return windowHandle
     }
 

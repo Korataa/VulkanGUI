@@ -27,7 +27,7 @@ public class Window {
 
         sdlContext.setWindowHandle(sdlWindow: windowHandle)
         // Enable relative mouse mode for this window by default (captures cursor)
-        sdlContext.setWindowRelativeMouseMode(true)
+        sdlContext.setWindowRelativeMouseMode(false)
     }
 
     func cleanup() {

@@ -26,7 +26,7 @@ let window = Window(sdlContext: sdlContext)
 window.createWindow(title: "CardRPG", width: 800, height: 600)
 
 // Create SDL input provider and enable relative/raw polling mode
-let inputProvider = SDLInputProvider()
+let inputProvider = SDLInputProvider(window: sdlContext.getWindowHandle()!)
 inputProvider.setRelativeMode(true)
 
 //----------------------------------------Init subsystems here-----------------------------------------------------
@@ -39,11 +39,6 @@ let eventManager = EventManager(sdlContext)
 // Create Graphics, which now owns and creates its GraphicsResourceManager
 let graphics = Graphics(sdlContext: sdlContext)
 graphics.initialize()
-
-// Configure render settings for frustum culling
-print("🎯 Enabling frustum culling...")
-graphics.settings = .performance  // Enable frustum culling
-// graphics.settings.debugCulling = true  // Uncomment to see culling stats
 
 // Create ResourceSystem using graphics resource manager (high-level orchestrator)
 let resourceSystem = ResourceSystem(graphicsResourceManager: graphics.resourceManager)
@@ -68,20 +63,25 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     graphics.addModel(model: model)
     print("Model loaded successfully!")
     
-    let hpText = Text("HP: 100")
-        .background(.red)
-        .fontSize(32)
-        .textColor(.white)
-        .textShadow(offset: Vector2(2, -2), color: Color(0, 0, 0, 128))
-    let scoreText = Text("Score: 0")
-        .background(.green)
-        .fontSize(32)
-        .textColor(.black)
-    let gameHUD = Column(spacing: 40) {
-        hpText
-        scoreText
+    // Create declarative UI - same visual result but cleaner code!
+    let gameHUD = Column(spacing: 20) {
+        // Top status bar
+        Row(spacing: 300) {
+            Text("HP: 100")
+                .background(.red)
+            
+            Text("Score: 0") 
+                .background(.green)
+        }
+        
+        Spacer()
+        
+        // Bottom left button
+        Text("Menu")
+            .background(.white)
     }
     .padding(20)
+    
     // Set the UI - automatic rendering!
     uiManager.setRoot(gameHUD)
     
