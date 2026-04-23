@@ -65,9 +65,9 @@ public struct Element {
     public var spacing: Float = 8.0
     public var padding: Spacing = Spacing()
     
-    // Event handlers
+    // Event handler stuff
     public var tapHandler: (() -> Void)? = nil
-    public var hoverHandler: ((Bool) -> Void)? = nil
+    public var onHoverStart(() -> Void)? = nil
 
     public var isDirty: Bool = true
 
@@ -77,6 +77,8 @@ public struct Element {
         self.style = style
         self.children = children
     }
+
+    
 }
 
 public enum ElementType {

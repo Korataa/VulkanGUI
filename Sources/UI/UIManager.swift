@@ -474,5 +474,20 @@ public class UIManager {
         wasMousePressed = isMousePressed
 
         currentMousePosition = input.mousePosition
+        isMousePressed = input.isMouseButtonDown(0) //0 is left mouse button, probably should make this better as some point
+
+        //Do hit testing using the stored state
+        hoveredElement = hitTest(at: currentMousePosition)
+
+        //Detect transitions using previous frame state
+        if hoveredElement != previousHoveredElement {
+            previousHoveredElement?.onHoverEnd?()
+            hoveredElement?.onHoverBegin?()
+        }
+
+        if isMousePressed && !wasMousePressed {
+            hoveredElement?.tapHandler?()
+        }
     }
+
 }
