@@ -19,6 +19,15 @@ public class UIManager {
     private var useSDFScaleComparisonOverlay: Bool = false
     private var useTrueSDFTextMode: Bool = false
 
+    //INPUT VARIABLES
+    private var previousMousePosition = Vector2(0,0)
+    private var currentMousePosition = Vector2(0,0)
+    private var hoveredElement: Element?
+    private var previousHoveredElement: Element?
+    private var isMousePressed: Bool = false
+    private var wasMousePressed: Bool = false
+
+
     public init(graphics: Graphics) {
         self.graphics = graphics
     }
@@ -456,5 +465,14 @@ public class UIManager {
         graphics.setUITextMSDFMode(textUsesMSDF)
         print("Text resources initialized (texture id: \(textureID), mode: \(textUsesMSDF ? "MSDF" : "SDF"))")
         return true
+    }
+
+    //Input stuff
+    public func handleInput(input: InputProvider) {
+        previousMousePosition = currentMousePosition
+        previousHoveredElement = hoveredElement
+        wasMousePressed = isMousePressed
+
+        currentMousePosition = input.mousePosition
     }
 }

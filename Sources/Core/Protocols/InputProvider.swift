@@ -1,6 +1,8 @@
+import Math
+
 public protocol InputProvider {
     //Mouse
-    var mousePosition: (x: Float, y: Float) { get }
+    var mousePosition: Vector2 { get }
     func isMouseButtonDown(_ button: Int) -> Bool
 
     //Keyboard
