@@ -59,6 +59,7 @@ public struct Element {
     public var bounds: Rectangle
     public var style: Style
     public var elementType: ElementType
+    public var id: String?
     
     // Layout properties
     public var layoutType: LayoutType = .flex(direction: .column, justify: .start, align: .stretch)
@@ -66,16 +67,18 @@ public struct Element {
     public var padding: Spacing = Spacing()
     
     // Event handler stuff
-    public var tapHandler: (() -> Void)? = nil
-    public var onHoverStart(() -> Void)? = nil
+    public var tapHandler: (@MainActor () -> Void)? = nil
+    public var onHoverStart: (@MainActor () -> Void)? = nil
+    public var onHoverEnd: (@MainActor () -> Void)? = nil
 
     public var isDirty: Bool = true
 
-    public init(type: ElementType, bounds: Rectangle = Rectangle.zero, style: Style = Style(), children: [Element] = []) {
+    public init(type: ElementType, bounds: Rectangle = Rectangle.zero, style: Style = Style(), children: [Element] = [], id: String? = nil) {
         self.elementType = type
         self.bounds = bounds
         self.style = style
         self.children = children
+        self.id = id
     }
 
     
@@ -213,9 +216,27 @@ public extension Element {
         return copy
     }
     
-    func onTap(_ handler: @escaping () -> Void) -> Element {
+    func onTap(_ handler: @escaping @MainActor () -> Void) -> Element {
         var copy = self
         copy.tapHandler = handler
+        return copy
+    }
+
+    func onHoverStart(_ handler: @escaping @MainActor () -> Void) -> Element {
+        var copy = self
+        copy.onHoverStart = handler
+        return copy
+    }
+
+    func onHoverEnd(_ handler: @escaping @MainActor () -> Void) -> Element {
+        var copy = self
+        copy.onHoverEnd = handler
+        return copy
+    }
+
+    func id(_ value: String) -> Element {
+        var copy = self
+        copy.id = value
         return copy
     }
     

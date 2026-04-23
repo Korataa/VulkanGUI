@@ -3,9 +3,16 @@ import Core
 import Graphics
 import Math
 
+@MainActor
 public class UIManager {
+    private struct HitTestResult {
+        let element: Element
+        let interactionID: String
+    }
+
     private var graphics: Graphics
     private var rootElement: Element?
+    private var layoutedRootElement: Element?
     private var needsRebuild: Bool = true
     private var screenBounds: Rectangle = Rectangle(position: Vector2(0, 0), width: 800, height: 600)
     private var uiTimeSeconds: Float = 0.0
@@ -23,7 +30,7 @@ public class UIManager {
     private var previousMousePosition = Vector2(0,0)
     private var currentMousePosition = Vector2(0,0)
     private var hoveredElement: Element?
-    private var previousHoveredElement: Element?
+    private var hoveredElementID: String?
     private var isMousePressed: Bool = false
     private var wasMousePressed: Bool = false
 
@@ -62,6 +69,7 @@ public class UIManager {
         guard let root = rootElement else { return }
         hasAnimatedTextGlow = false
         let layoutedRoot = performLayout(root, in: screenBounds)
+        layoutedRootElement = layoutedRoot
         let newRenderables = generateRenderables(from: layoutedRoot)
         if hasInitializedUI && renderablesEqual(cachedRenderables, newRenderables) {
             print("[UI DEBUG] UI unchanged - reusing cached renderables")
@@ -470,24 +478,56 @@ public class UIManager {
     //Input stuff
     public func handleInput(input: InputProvider) {
         previousMousePosition = currentMousePosition
-        previousHoveredElement = hoveredElement
         wasMousePressed = isMousePressed
 
         currentMousePosition = input.mousePosition
         isMousePressed = input.isMouseButtonDown(0) //0 is left mouse button, probably should make this better as some point
 
-        //Do hit testing using the stored state
-        hoveredElement = hitTest(at: currentMousePosition)
+        let previousHoveredID = hoveredElementID
+        let previousHoveredElement = hoveredElement
 
-        //Detect transitions using previous frame state
-        if hoveredElement != previousHoveredElement {
+        //Do hit testing using the stored state
+        let hitResult = hitTest(at: currentMousePosition)
+        hoveredElement = hitResult?.element
+        hoveredElementID = hitResult?.interactionID
+
+        // Detect transitions using stable IDs so state survives element rebuilds.
+        if hoveredElementID != previousHoveredID {
             previousHoveredElement?.onHoverEnd?()
-            hoveredElement?.onHoverBegin?()
+            hoveredElement?.onHoverStart?()
         }
 
         if isMousePressed && !wasMousePressed {
             hoveredElement?.tapHandler?()
         }
+    }
+
+    private func hitTest(at point: Vector2) -> HitTestResult? {
+        guard let root = layoutedRootElement else { return nil }
+        return hitTest(at: point, in: root, path: "root")
+    }
+
+    private func hitTest(at point: Vector2, in element: Element, path: String) -> HitTestResult? {
+        guard pointInside(point, bounds: element.bounds) else {
+            return nil
+        }
+
+        for index in element.children.indices.reversed() {
+            let child = element.children[index]
+            if let childHit = hitTest(at: point, in: child, path: "\(path).\(index)") {
+                return childHit
+            }
+        }
+
+        let interactionID = element.id ?? path
+        return HitTestResult(element: element, interactionID: interactionID)
+    }
+
+    private func pointInside(_ point: Vector2, bounds: Rectangle) -> Bool {
+        point.x >= bounds.position.x &&
+        point.x <= (bounds.position.x + bounds.width) &&
+        point.y >= bounds.position.y &&
+        point.y <= (bounds.position.y + bounds.height)
     }
 
 }

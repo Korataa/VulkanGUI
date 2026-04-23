@@ -15,6 +15,7 @@ import Graphics
 import Assets
 import UI
 var quit: Bool = false
+var buttonPressed_state = false
 
 //------------------------------SDLCONTEXT INITIALIZE BECASUE EVERYTHING RELIES ON IT--------------------------------
 let sdlContext = SDLContext()
@@ -27,7 +28,6 @@ window.createWindow(title: "CardRPG", width: 800, height: 600)
 
 // Create SDL input provider and enable relative/raw polling mode
 let inputProvider = SDLInputProvider(window: sdlContext.getWindowHandle()!)
-inputProvider.setRelativeMode(true)
 
 //----------------------------------------Init subsystems here-----------------------------------------------------
 
@@ -62,28 +62,9 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     print("Model transform: \(model.transform)")
     graphics.addModel(model: model)
     print("Model loaded successfully!")
-    
-    // Create declarative UI - same visual result but cleaner code!
-    let gameHUD = Column(spacing: 20) {
-        // Top status bar
-        Row(spacing: 300) {
-            Text("HP: 100")
-                .background(.red)
-            
-            Text("Score: 0") 
-                .background(.green)
-        }
-        
-        Spacer()
-        
-        // Bottom left button
-        Text("Menu")
-            .background(.white)
-    }
-    .padding(20)
-    
+
     // Set the UI - automatic rendering!
-    uiManager.setRoot(gameHUD)
+    uiManager.setRoot(buildHUD(buttonPressed: buttonPressed_state))
     
     print("✅ Declarative UI created with new system!")
     
@@ -101,6 +82,29 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
 // Back view: position: Vector3(0.0, 0.0, 35.0) 
 // Side view: position: Vector3(35.0, 0.0, 9.5)
 // Angled view: position: Vector3(20.0, 15.0, -20.0)
+
+func buildHUD(buttonPressed: Bool) -> Element {
+    return Column(spacing: 20) {
+        Row(spacing: 300) {
+            Text("HP: 100")
+                .background(.red)
+            Text("Score: 0")
+                .background(.green)
+        }
+
+        Spacer()
+
+        Button("Menu") {
+            Task { @MainActor in
+                print("Menu button clicked!")
+                buttonPressed_state = true
+                uiManager.setRoot(buildHUD(buttonPressed: buttonPressed_state))
+            }
+        }
+        .background(buttonPressed ? .blue : .black)
+    }
+    .padding(20)
+}
 
 @MainActor
 func updateCamera() {
@@ -136,6 +140,10 @@ print("Current angle Y: \(cameraAngleY), angle X: \(cameraAngleX), distance: \(c
 //----------------------------------------GAME LOOP-----------------------------------------------------
 while !quit {
     eventManager.pollEvents(shouldQuit: &quit)
+
+    //Feed input to ui each frame
+    inputProvider.update()
+    uiManager.handleInput(input: inputProvider)
     
     // Camera controls
     guard let keyboardState = SDL_GetKeyboardState(nil) else { continue }
