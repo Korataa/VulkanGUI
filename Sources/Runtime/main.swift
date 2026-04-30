@@ -5,6 +5,17 @@ var cameraDistance: Float = 5.0  // Much closer for debugging
 var cameraAngleY: Float = 0.0      // Horizontal rotation (around Y axis)
 var cameraAngleX: Float = 0.0      // Vertical rotation (pitch)
 let cameraTarget = Vector3(0.0, 0.0, 0.0)
+
+enum GameAction {
+    case cameraLeft
+    case cameraRight
+    case cameraUp
+    case cameraDown
+    case zoomIn
+    case zoomOut
+    case resetCamera
+}
+
 import CSDL3
 import Foundation
 
@@ -15,7 +26,6 @@ import Graphics
 import Assets
 import UI
 var quit: Bool = false
-var buttonPressed_state = false
 
 //------------------------------SDLCONTEXT INITIALIZE BECASUE EVERYTHING RELIES ON IT--------------------------------
 let sdlContext = SDLContext()
@@ -28,6 +38,14 @@ window.createWindow(title: "CardRPG", width: 800, height: 600)
 
 // Create SDL input provider and enable relative/raw polling mode
 let inputProvider = SDLInputProvider(window: sdlContext.getWindowHandle()!)
+let actionMap = ActionMap<GameAction>()
+actionMap.bind(.cameraLeft, to: Int(SDL_SCANCODE_A.rawValue))
+actionMap.bind(.cameraRight, to: Int(SDL_SCANCODE_D.rawValue))
+actionMap.bind(.cameraUp, to: Int(SDL_SCANCODE_W.rawValue))
+actionMap.bind(.cameraDown, to: Int(SDL_SCANCODE_S.rawValue))
+actionMap.bind(.zoomIn, to: Int(SDL_SCANCODE_Q.rawValue))
+actionMap.bind(.zoomOut, to: Int(SDL_SCANCODE_E.rawValue))
+actionMap.bind(.resetCamera, to: Int(SDL_SCANCODE_R.rawValue))
 
 //----------------------------------------Init subsystems here-----------------------------------------------------
 
@@ -49,6 +67,7 @@ let assetLoader = AssetLoader(resourceManager: resourceSystem.graphicsResourceMa
 // Create UI Manager early (before model loading)
 print("Creating UI Manager...")
 let uiManager = UIManager(graphics: graphics)
+let uiState = UIState(uiManager: uiManager)
 
 if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf") {
     let model = assetLoader.createModel(from: loadedModel)
@@ -64,7 +83,7 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
     print("Model loaded successfully!")
 
     // Set the UI - automatic rendering!
-    uiManager.setRoot(buildHUD(buttonPressed: buttonPressed_state))
+    uiManager.setRoot(uiState.buildHUD())
     
     print("✅ Declarative UI created with new system!")
     
@@ -83,27 +102,38 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
 // Side view: position: Vector3(35.0, 0.0, 9.5)
 // Angled view: position: Vector3(20.0, 15.0, -20.0)
 
-func buildHUD(buttonPressed: Bool) -> Element {
-    return Column(spacing: 20) {
-        Row(spacing: 300) {
-            Text("HP: 100")
-                .background(.red)
-            Text("Score: 0")
-                .background(.green)
-        }
+class UIState {
+    let buttonPressed = Reactive(false)
+    private let uiManager: UIManager
 
-        Spacer()
+    init(uiManager: UIManager) {
+        self.uiManager = uiManager
 
-        Button("Menu") {
-            Task { @MainActor in
-                print("Menu button clicked!")
-                buttonPressed_state = true
-                uiManager.setRoot(buildHUD(buttonPressed: buttonPressed_state))
-            }
+        // When any state changes, automatically rebuild the UI
+        buttonPressed.onChange { [weak self] _ in
+            guard let self else { return }
+            self.uiManager.setRoot(self.buildHUD())
         }
-        .background(buttonPressed ? .blue : .black)
     }
-    .padding(20)
+
+    func buildHUD() -> Element {
+        return Column(spacing: 20) {
+            Row(spacing: 300) {
+                Text("HP: 100")
+                    .background(.red)
+                Text("Score: 0")
+                    .background(.green)
+            }
+
+            Spacer()
+
+            Button("Menu") {
+                self.buttonPressed.value = true
+            }
+            .background(buttonPressed.value ? .blue : .black)
+        }
+        .padding(20)
+    }
 }
 
 @MainActor
@@ -143,42 +173,42 @@ while !quit {
 
     //Feed input to ui each frame
     inputProvider.update()
+    actionMap.update(input: inputProvider)
     uiManager.handleInput(input: inputProvider)
-    
+
     // Camera controls
-    guard let keyboardState = SDL_GetKeyboardState(nil) else { continue }
     var cameraChanged = false
-    
-    if keyboardState[Int(SDL_SCANCODE_A.rawValue)] {
+
+    if actionMap.isDown(.cameraLeft) {
         cameraAngleY -= 0.005  // Rotate left (much slower)
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_D.rawValue)] {
+    if actionMap.isDown(.cameraRight) {
         cameraAngleY += 0.005  // Rotate right (much slower)
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_W.rawValue)] {
+    if actionMap.isDown(.cameraUp) {
         cameraAngleX += 0.005  // Rotate up (much slower)
         // Clamp vertical angle to prevent weird stretching
         if cameraAngleX > 1.4 { cameraAngleX = 1.4 }  // About 80 degrees max
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_S.rawValue)] {
+    if actionMap.isDown(.cameraDown) {
         cameraAngleX -= 0.005  // Rotate down (much slower)
         // Clamp vertical angle to prevent weird stretching
         if cameraAngleX < -1.4 { cameraAngleX = -1.4 }  // About -80 degrees min
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_Q.rawValue)] {
+    if actionMap.isDown(.zoomIn) {
         cameraDistance -= 0.1  // Zoom in (much slower)
         if cameraDistance < 5.0 { cameraDistance = 5.0 }
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_E.rawValue)] {
+    if actionMap.isDown(.zoomOut) {
         cameraDistance += 0.1  // Zoom out (much slower)
         cameraChanged = true
     }
-    if keyboardState[Int(SDL_SCANCODE_R.rawValue)] {
+    if actionMap.isJustPressed(.resetCamera) {
         // Reset camera
         cameraAngleY = 0.0
         cameraAngleX = 0.0

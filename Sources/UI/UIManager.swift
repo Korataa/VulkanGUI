@@ -3,7 +3,6 @@ import Core
 import Graphics
 import Math
 
-@MainActor
 public class UIManager {
     private struct HitTestResult {
         let element: Element
@@ -481,7 +480,8 @@ public class UIManager {
         wasMousePressed = isMousePressed
 
         currentMousePosition = input.mousePosition
-        isMousePressed = input.isMouseButtonDown(0) //0 is left mouse button, probably should make this better as some point
+        // SDL uses 1 for left mouse button.
+        isMousePressed = input.isMouseButtonDown(1)
 
         let previousHoveredID = hoveredElementID
         let previousHoveredElement = hoveredElement
@@ -498,7 +498,12 @@ public class UIManager {
         }
 
         if isMousePressed && !wasMousePressed {
-            hoveredElement?.tapHandler?()
+                if let handler = hoveredElement?.tapHandler {
+                    print("[UI] tap fired on element id: \(hoveredElementID ?? "nil")")
+                    handler()
+                } else {
+                    print("[UI] click at \(currentMousePosition) — hit: \(hoveredElementID ?? "nothing"), no handler")
+                }
         }
     }
 
@@ -519,8 +524,12 @@ public class UIManager {
             }
         }
 
-        let interactionID = element.id ?? path
-        return HitTestResult(element: element, interactionID: interactionID)
+        // Only return this element if it has at least one handler, otherwise let parent handle it
+        if element.tapHandler != nil || element.onHoverStart != nil || element.onHoverEnd != nil {
+            let interactionID = element.id ?? path
+            return HitTestResult(element: element, interactionID: interactionID)
+        }
+        return nil
     }
 
     private func pointInside(_ point: Vector2, bounds: Rectangle) -> Bool {

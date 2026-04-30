@@ -67,9 +67,9 @@ public struct Element {
     public var padding: Spacing = Spacing()
     
     // Event handler stuff
-    public var tapHandler: (@MainActor () -> Void)? = nil
-    public var onHoverStart: (@MainActor () -> Void)? = nil
-    public var onHoverEnd: (@MainActor () -> Void)? = nil
+    public var tapHandler: (() -> Void)? = nil
+    public var onHoverStart: (() -> Void)? = nil
+    public var onHoverEnd: (() -> Void)? = nil
 
     public var isDirty: Bool = true
 
@@ -216,19 +216,19 @@ public extension Element {
         return copy
     }
     
-    func onTap(_ handler: @escaping @MainActor () -> Void) -> Element {
+    func onTap(_ handler: @escaping () -> Void) -> Element {
         var copy = self
         copy.tapHandler = handler
         return copy
     }
 
-    func onHoverStart(_ handler: @escaping @MainActor () -> Void) -> Element {
+    func onHoverStart(_ handler: @escaping () -> Void) -> Element {
         var copy = self
         copy.onHoverStart = handler
         return copy
     }
 
-    func onHoverEnd(_ handler: @escaping @MainActor () -> Void) -> Element {
+    func onHoverEnd(_ handler: @escaping () -> Void) -> Element {
         var copy = self
         copy.onHoverEnd = handler
         return copy
