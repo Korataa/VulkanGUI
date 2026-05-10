@@ -121,14 +121,14 @@ public class Graphics {
     
     /// Render multiple 3D models efficiently 
     private func render3DModels(_ models: [Model]) {
-        print("🎯 Graphics.render3DModels called with \(models.count) models")
+        logTrace(.graphics, source: "Graphics", "render3DModels called with \(models.count) models")
 
         var visibleModels = models
 
         // Apply frustum culling if enabled
         if settings.frustumCulling {
             guard let camera = renderer.camera else {
-                print("⚠️ No camera available for frustum culling - skipping culling")
+                logWarn(.graphics, source: "Graphics", "No camera available for frustum culling - skipping culling")
                 return // Early return instead of else
             }
             
@@ -141,20 +141,20 @@ public class Graphics {
                 return frustum.intersects(model.boundingBox)
             }
 
-            print("🎯 Culled \(models.count - visibleModels.count) models, rendering \(visibleModels.count)")
+            logDebug(.graphics, source: "Graphics", "Culled \(models.count - visibleModels.count) models, rendering \(visibleModels.count)")
         }
 
         if !visibleModels.isEmpty {
             let pipeline = get3DPipeline()
-            print("🎯 Got pipeline: \(type(of: pipeline))")
+            logTrace(.graphics, source: "Graphics", "Got pipeline: \(type(of: pipeline))")
             if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
-                print("🎯 Successfully cast to VulkanPipelineImpl, calling render()")
+                logTrace(.graphics, source: "Graphics", "Successfully cast to VulkanPipelineImpl, calling render()")
                 vulkanPipeline.render(models: visibleModels)
             } else {
-                print("❌ Failed to cast pipeline to VulkanPipelineImpl!")
+                logError(.graphics, source: "Graphics", "Failed to cast pipeline to VulkanPipelineImpl")
             }
         } else {
-            print("❌ No models to render!")
+            logTrace(.graphics, source: "Graphics", "No models to render")
         }
     }
     
@@ -183,7 +183,7 @@ public class Graphics {
         
         // Only reset buffers AND upload IF we actually have dirty/new elements
         if !dirtyElements.isEmpty || !newElements.isEmpty {
-            print("📤 Found \(dirtyElements.count) dirty + \(newElements.count) new UI elements - uploading")
+            logDebug(.ui, source: "Graphics", "Found \(dirtyElements.count) dirty + \(newElements.count) new UI elements - uploading")
             // Reset buffer offsets BEFORE uploading (critical!)
             graphicsResourceManager?.reset2DBuffers()
             // Mark ALL existing elements as needing re-upload after reset
@@ -193,7 +193,7 @@ public class Graphics {
             // Upload ALL elements (since we reset the buffer)
             uploadUIElements(uiElements)
         } else {
-            print("♻️ No UI changes detected - skipping upload")
+            logTrace(.ui, source: "Graphics", "No UI changes detected - skipping upload")
         }
         
         let solidElements = uiElements.filter { !$0.usesSDF && $0.textureID == nil }

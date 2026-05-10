@@ -1,6 +1,7 @@
 import Platform
 import Core
 import Cvulkan
+import Logging
 
 //High level pipeline types
 public enum PipelineType {
@@ -133,14 +134,14 @@ final class VulkanPipelineImpl: Pipeline {
         )
         
         if pipeline == nil || layout == nil {
-            print("ERROR: Pipeline creation failed - pipeline: \(pipeline != nil), layout: \(layout != nil)")
+            logError(.graphics, source: "Pipeline", "Pipeline creation failed - pipeline: \(pipeline != nil), layout: \(layout != nil)")
             fatalError("Failed to create Vulkan pipeline for type: \(descriptor.type)")
         }
         
         self.pipelineHandle = pipeline
         self.pipelineLayout = layout
         
-        print("SUCCESS: Created Vulkan pipeline for type: \(descriptor.type)")
+        logInfo(.graphics, source: "Pipeline", "Created Vulkan pipeline for type: \(descriptor.type)")
     }
     
     // Helper methods to convert high-level descriptor to Vulkan specifics
@@ -236,10 +237,10 @@ final class VulkanPipelineImpl: Pipeline {
             fatalError("pipeline not created properly")
         }
 
-        print("🔗 Binding pipeline: \(pipeline) with layout: \(layout)")
+        logTrace(.vulkan, source: "Pipeline", "Binding pipeline: \(pipeline) with layout: \(layout)")
         // Use VulkanRenderer's helper methods instead of direct Vulkan calls
         vulkanRenderer.bindPipeline(pipeline)
-        print("🔗 About to bind descriptor sets for pipeline type: \(descriptor.type)")
+        logTrace(.vulkan, source: "Pipeline", "About to bind descriptor sets for pipeline type: \(descriptor.type)")
         bindDescriptorSetsForPipeline(layout: layout)
     }
 
@@ -249,16 +250,16 @@ final class VulkanPipelineImpl: Pipeline {
             // For 3D graphics, bind frame (set 0) and material (set 2) descriptor sets only
             // The transform descriptor set (set 1) will be bound by drawModelsWithDynamicOffsets with proper per-model offsets
             if let frameSet = frameDescriptorSet {
-                print("🔗 Binding frame descriptor set (set 0): \(frameSet)")
+                logTrace(.vulkan, source: "Pipeline", "Binding frame descriptor set (set 0): \(frameSet)")
                 vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: [frameSet], dynamicOffsets: [])
             } else {
-                print("❌ No frame descriptor set available!")
+                logError(.vulkan, source: "Pipeline", "No frame descriptor set available")
             }
             if let materialSet = materialDescriptorSet {
-                print("🔗 Binding material descriptor set (set 2): \(materialSet)")
+                logTrace(.vulkan, source: "Pipeline", "Binding material descriptor set (set 2): \(materialSet)")
                 vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 2, sets: [materialSet], dynamicOffsets: [])
             } else {
-                print("❌ No material descriptor set available!")
+                logError(.vulkan, source: "Pipeline", "No material descriptor set available")
             }
         case .Graphics2D, .UI, .UITextSDF:
             // For 2D/UI, bind all sets together since they don't need per-model dynamic offsets
@@ -279,38 +280,38 @@ final class VulkanPipelineImpl: Pipeline {
     }
 
     func render(models: [Model]) {
-        print("🔥 VulkanPipelineImpl.render() called with \(models.count) models")
+        logTrace(.graphics, source: "Pipeline", "VulkanPipelineImpl.render called with \(models.count) models")
         // Bind this pipeline and its descriptor sets
         bind()
         
         // Draw all models with proper dynamic offset handling
         guard let layout = pipelineLayout, let transformSet = transformDescriptorSet else {
-            print("❌ Missing pipeline layout or transform descriptor set!")
+            logError(.graphics, source: "Pipeline", "Missing pipeline layout or transform descriptor set")
             return
         }
-        print("✅ About to call drawModelsWithDynamicOffsets with \(models.count) models")
+        logTrace(.graphics, source: "Pipeline", "About to call drawModelsWithDynamicOffsets with \(models.count) models")
         vulkanRenderer.drawModelsWithDynamicOffsets(models, pipelineLayout: layout, transformDescriptorSet: transformSet)
     }
     
     /// Clean UI rendering that mirrors 3D model rendering
     /// Uses 2D buffers and existing UI descriptor sets
     func renderUI(models: [ModelUI]) {
-        print("🎨 VulkanPipelineImpl.renderUI() called with \(models.count) UI models")
+        logTrace(.ui, source: "Pipeline", "VulkanPipelineImpl.renderUI called with \(models.count) UI models")
         // Bind this UI pipeline and its descriptor sets
         bind()
         
         // Draw all UI models using existing UI infrastructure
         guard let layout = pipelineLayout else {
-            print("❌ Missing pipeline layout!")
+            logError(.ui, source: "Pipeline", "Missing pipeline layout")
             return
         }
-        print("✅ About to call drawUIModelsWithOffsets with \(models.count) UI models")
+        logTrace(.ui, source: "Pipeline", "About to call drawUIModelsWithOffsets with \(models.count) UI models")
         vulkanRenderer.drawUIModelsWithOffsets(models, pipelineLayout: layout)
     }
 
     func unbind() {
         // Vulkan doesn't really need explicit unbinding - pipelines stay bound until replaced
-        print("Unbinding Vulkan pipeline (no-op)")
+        logTrace(.vulkan, source: "Pipeline", "Unbinding Vulkan pipeline (no-op)")
     }
 
     func cleanup() {

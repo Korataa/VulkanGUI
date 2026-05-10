@@ -2,6 +2,7 @@ import Foundation
 import Core
 import Graphics
 import Math
+import Logging
 
 public class UIManager {
     private struct HitTestResult {
@@ -51,10 +52,10 @@ public class UIManager {
     public func update() {
         uiTimeSeconds += (1.0 / 60.0)
         if let root = rootElement {
-            print("[UI DEBUG] UIManager.update() called, root element: \(root.elementType), children: \(root.children.count)")
+            logTrace(.ui, source: "UIManager", "update root: \(root.elementType), children: \(root.children.count)")
         }
         if needsRebuild {
-            print("[UI DEBUG] UI REBUILDING")
+            logDebug(.ui, source: "UIManager", "UI rebuilding")
             rebuild()
             needsRebuild = false
         }
@@ -71,10 +72,10 @@ public class UIManager {
         layoutedRootElement = layoutedRoot
         let newRenderables = generateRenderables(from: layoutedRoot)
         if hasInitializedUI && renderablesEqual(cachedRenderables, newRenderables) {
-            print("[UI DEBUG] UI unchanged - reusing cached renderables")
+            logTrace(.ui, source: "UIManager", "UI unchanged - reusing cached renderables")
             return
         }
-        print("[UI DEBUG] UI changed - updating graphics (\(newRenderables.count) elements)")
+        logDebug(.ui, source: "UIManager", "UI changed - updating graphics (\(newRenderables.count) elements)")
         graphics.clearUIElements()
         if hasInitializedUI {
             let reusedRenderables = reuseCompatibleRenderables(cachedRenderables, newRenderables)
@@ -85,7 +86,7 @@ public class UIManager {
             cachedRenderables = newRenderables
             hasInitializedUI = true
         }
-        print("[UI DEBUG] UI update complete!")
+        logTrace(.ui, source: "UIManager", "UI update complete")
     }
 
     private func renderablesEqual(_ a: [Renderable2D], _ b: [Renderable2D]) -> Bool {
@@ -202,7 +203,7 @@ public class UIManager {
         var renderables: [Renderable2D] = []
         
         // Generate renderable for this element
-        print("🎨 Generating renderable for element: \(element.elementType), bounds: \(element.bounds), backgroundColor: \(String(describing: element.style.backgroundColor))")
+        logTrace(.ui, source: "UIManager", "Generating renderable for \(element.elementType), bounds: \(element.bounds)")
         switch element.elementType {
         case .rect(let color, let textureID):
             let renderable = Renderable2D(

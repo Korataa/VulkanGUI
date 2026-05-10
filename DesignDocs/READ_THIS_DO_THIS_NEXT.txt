@@ -1,0 +1,4 @@
+If you want the log file to become genuinely useful across the engine, the next good move is:
+
+Convert the remaining high-volume print(...) hotspots to logTrace/logDebug/logInfo
+Add more categories if you want finer separation, like render, audio, scene, gameplay

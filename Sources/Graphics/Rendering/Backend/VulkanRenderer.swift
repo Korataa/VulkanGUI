@@ -1,6 +1,7 @@
 import Platform
 import Core
 import Math
+import Logging
 
     // Helper to atomically take and nil out a noncopyable property
     private func take<T>(_ value: inout T?) -> T? {
@@ -2744,8 +2745,7 @@ same here 0       1
         
         let orthoMatrix = orthographicMatrix(left: left, right: right, bottom: bottom, top: top, near: near, far: far)
         
-        print("🔢 UI Orthographic matrix: left=\(left), right=\(right), top=\(top), bottom=\(bottom)")
-        print("🔢 Matrix: [\(orthoMatrix[0]), \(orthoMatrix[1]), \(orthoMatrix[2]), \(orthoMatrix[3])]")
+        logTrace(.ui, source: "VulkanRenderer", "UI ortho matrix: left=\(left), right=\(right), top=\(top), bottom=\(bottom)")
         
         var uiProjectionConstants = UIProjectionConstants(
             projection: orthoMatrix,
@@ -2763,7 +2763,7 @@ same here 0       1
             vmaUnmapMemory(vmaAllocator!, uiProjectionUBOMemory)
         }
         
-        print("📱 Updated UI projection: screen=\(screenWidth)x\(screenHeight)")
+        logTrace(.ui, source: "VulkanRenderer", "Updated UI projection: screen=\(screenWidth)x\(screenHeight)")
     }
 
     //Synchronization shit
@@ -2795,7 +2795,7 @@ same here 0       1
             inFlightFences?.append(fence)
         }
         
-        print("Created semaphores and fence successfully!")
+        logInfo(.vulkan, source: "VulkanRenderer", "Created semaphores and fences")
     }
 
     func synchronize() {
@@ -2868,8 +2868,7 @@ same here 0       1
         viewport.minDepth = 0.0
         viewport.maxDepth = 1.0
 
-        print("📺 Viewport: (\(viewport.x), \(viewport.y)) size: \(viewport.width)x\(viewport.height)")
-        print("📺 Expected: 800x600, Swapchain extent: \(swapchainExtent!.width)x\(swapchainExtent!.height)")
+        logTrace(.vulkan, source: "VulkanRenderer", "Viewport: (\(viewport.x), \(viewport.y)) size: \(viewport.width)x\(viewport.height)")
         vkCmdSetViewport(commandBuffer, 0, 1, &viewport)
 
         var scissor = VkRect2D()
@@ -2987,8 +2986,7 @@ same here 0       1
     private var drawDebugCount = 0
     
     func drawModelsWithDynamicOffsets(_ models: [Model], pipelineLayout: VkPipelineLayout, transformDescriptorSet: VkDescriptorSet) {
-        print("📍 drawModelsWithDynamicOffsets called with \(models.count) models")
-        print("📍 pipelineLayout: \(pipelineLayout), transformDescriptorSet: \(transformDescriptorSet)")
+        logTrace(.graphics, source: "VulkanRenderer", "drawModelsWithDynamicOffsets models=\(models.count)")
         var currentTransformIndex = 0
         
         drawDebugCount += 1
@@ -2999,45 +2997,45 @@ same here 0       1
         
         for model in models {
             // Bind vertex buffer for all models (same buffer)
-            print("📍 Command buffer: \(commandBuffer != nil ? "valid" : "NULL")")
-            print("📍 Resource manager: \(resourceManager != nil ? "valid" : "NULL")")
+            logTrace(.graphics, source: "VulkanRenderer", "Command buffer: \(commandBuffer != nil ? "valid" : "NULL")")
+            logTrace(.graphics, source: "VulkanRenderer", "Resource manager: \(resourceManager != nil ? "valid" : "NULL")")
             resourceManager?.withStaticVertexBuffer { vertexBuffer in
                 if showDebug {
-                    print("    Binding vertex buffer: size=\(vertexBuffer.size)")
+                    logTrace(.graphics, source: "VulkanRenderer", "Binding vertex buffer size=\(vertexBuffer.size)")
                 }
-                print("📍 Binding vertex buffer: handle=\(vertexBuffer.bufferHandle.asVulkanBuffer())")
+                logTrace(.graphics, source: "VulkanRenderer", "Binding vertex buffer handle=\(vertexBuffer.bufferHandle.asVulkanBuffer())")
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, withUnsafePointer(to: vertexBuffer.bufferHandle.asVulkanBuffer()) { $0 }, withUnsafePointer(to: VkDeviceSize(0)) { $0 })
             }
 
             // Bind index buffer (same for all models)
             resourceManager?.withIndexBuffer { indexBuffer in
                 if showDebug {
-                    print("    Binding index buffer: size=\(indexBuffer.size)")
+                    logTrace(.graphics, source: "VulkanRenderer", "Binding index buffer size=\(indexBuffer.size)")
                 }
-                print("📍 Binding index buffer: handle=\(indexBuffer.bufferHandle.asVulkanBuffer())")
+                logTrace(.graphics, source: "VulkanRenderer", "Binding index buffer handle=\(indexBuffer.bufferHandle.asVulkanBuffer())")
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 0, VK_INDEX_TYPE_UINT32)
             }
 
             // Update transform for this model
             let transformOffset = currentTransformIndex * Int(transformAlignment)
-            print("📍 Transform offset: \(transformOffset), alignment: \(transformAlignment)")
+            logTrace(.graphics, source: "VulkanRenderer", "Transform offset=\(transformOffset), alignment=\(transformAlignment)")
             updateTransformUBO(at: transformOffset, transform: model.transform)
             
             // Rebind transform descriptor set with correct dynamic offset for this model
             let dynamicOffsets = [UInt32(transformOffset)]
-            print("📍 Binding transform descriptor set (set 1) with offset: \(dynamicOffsets)")
+            logTrace(.graphics, source: "VulkanRenderer", "Binding transform descriptor set offset=\(dynamicOffsets)")
             bindDescriptorSets(pipelineLayout: pipelineLayout, firstSet: 1, sets: [transformDescriptorSet], dynamicOffsets: dynamicOffsets)
 
             // Draw all meshes in this model
             if showDebug {
-                print("  Model \(currentTransformIndex): position=\(model.transform.position), scale=\(model.transform.scale), \(model.meshes.count) meshes")
+                logTrace(.graphics, source: "VulkanRenderer", "Model \(currentTransformIndex): position=\(model.transform.position), scale=\(model.transform.scale), meshes=\(model.meshes.count)")
             }
-            print("📍 About to draw \(model.meshes.count) meshes for model \(currentTransformIndex)")
+            logTrace(.graphics, source: "VulkanRenderer", "About to draw \(model.meshes.count) meshes for model \(currentTransformIndex)")
             for mesh in model.meshes {
                 if showDebug {
-                    print("    Drawing mesh: indices=\(mesh.indexCount), offset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
+                    logTrace(.graphics, source: "VulkanRenderer", "Drawing mesh indices=\(mesh.indexCount), offset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
                 }
-                print("📍 Drawing mesh: indices=\(mesh.indexCount), offset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
+                logTrace(.graphics, source: "VulkanRenderer", "Drawing mesh indices=\(mesh.indexCount), offset=\(mesh.indexOffset), vertexOffset=\(mesh.vertexOffset)")
                 vkCmdDrawIndexed(
                     commandBuffer!,
                     UInt32(mesh.indexCount),
@@ -3046,7 +3044,7 @@ same here 0       1
                     Int32(mesh.vertexOffset),
                     0
                 )
-                print("✅ Draw call executed successfully")
+                logTrace(.graphics, source: "VulkanRenderer", "Draw call executed successfully")
             }
             
             currentTransformIndex += 1
@@ -3056,10 +3054,10 @@ same here 0       1
     /// Clean UI rendering method that mirrors 3D model rendering
     /// Uses 2D buffers and existing UI descriptor sets
     func drawUIModelsWithOffsets(_ uiModels: [ModelUI], pipelineLayout: VkPipelineLayout) {
-        print("🎨 drawUIModelsWithOffsets called with \(uiModels.count) UI models")
+        logTrace(.ui, source: "VulkanRenderer", "drawUIModelsWithOffsets models=\(uiModels.count)")
         
         guard !uiModels.isEmpty else {
-            print("📦 No UI models to render")
+            logTrace(.ui, source: "VulkanRenderer", "No UI models to render")
             return
         }
         
@@ -3067,20 +3065,19 @@ same here 0       1
         resourceManager?.withVertex2DBuffer { vertexBuffer in
             resourceManager?.withIndex2DBuffer { indexBuffer in
                 // Bind 2D buffers once for all UI models
-                print("🎨 Binding 2D vertex buffer: \(vertexBuffer.bufferHandle.asVulkanBuffer())")
+                logTrace(.ui, source: "VulkanRenderer", "Binding 2D vertex buffer: \(vertexBuffer.bufferHandle.asVulkanBuffer())")
                 vkCmdBindVertexBuffers(commandBuffer, 0, 1, 
                                      withUnsafePointer(to: vertexBuffer.bufferHandle.asVulkanBuffer()) { $0 }, 
                                      withUnsafePointer(to: VkDeviceSize(0)) { $0 })
                 
-                print("🎨 Binding 2D index buffer: \(indexBuffer.bufferHandle.asVulkanBuffer())")
+                logTrace(.ui, source: "VulkanRenderer", "Binding 2D index buffer: \(indexBuffer.bufferHandle.asVulkanBuffer())")
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer.bufferHandle.asVulkanBuffer(), 
                                    VkDeviceSize(0), VK_INDEX_TYPE_UINT32)
                 
                 // Draw all UI models
                 for uiModel in uiModels {
                     for uiMesh in uiModel.meshes {
-                        print("🎨 Drawing UI mesh: vertices=\(uiMesh.vertexCount), indices=\(uiMesh.indexCount)")
-                        print("    - vertexOffset=\(uiMesh.vertexOffset), indexOffset=\(uiMesh.indexOffset)")
+                        logTrace(.ui, source: "VulkanRenderer", "Drawing UI mesh: vertices=\(uiMesh.vertexCount), indices=\(uiMesh.indexCount), vertexOffset=\(uiMesh.vertexOffset), indexOffset=\(uiMesh.indexOffset)")
                         
                         // Draw this UI element using cached offsets (no new allocations!)
                         vkCmdDrawIndexed(
@@ -3093,7 +3090,7 @@ same here 0       1
                         )
                     }
                 }
-                print("✅ Rendered \(uiModels.count) UI models from cached 2D buffer data (zero allocations)")
+                logTrace(.ui, source: "VulkanRenderer", "Rendered \(uiModels.count) UI models from cached 2D buffer data")
             }
         }
     }

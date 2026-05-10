@@ -25,7 +25,17 @@ import Platform
 import Graphics
 import Assets
 import UI
+import Logging
 var quit: Bool = false
+
+EngineLog.shared.configure(
+    consoleMinimumLevel: .warning,
+    fileMinimumLevel: .trace,
+    enabledCategories: Set(LogCategory.allCases),
+    writeToConsole: true,
+    writeToFile: true,
+    logFilePath: EngineLog.defaultLogFileURL().path
+)
 
 //------------------------------SDLCONTEXT INITIALIZE BECASUE EVERYTHING RELIES ON IT--------------------------------
 let sdlContext = SDLContext()
@@ -104,6 +114,7 @@ if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf
 
 class UIState {
     let buttonPressed = Reactive(false)
+    let buttonHovered = Reactive(false)
     private let uiManager: UIManager
 
     init(uiManager: UIManager) {
@@ -111,6 +122,11 @@ class UIState {
 
         // When any state changes, automatically rebuild the UI
         buttonPressed.onChange { [weak self] _ in
+            guard let self else { return }
+            self.uiManager.setRoot(self.buildHUD())
+        }
+
+        buttonHovered.onChange { [weak self] _ in
             guard let self else { return }
             self.uiManager.setRoot(self.buildHUD())
         }
@@ -128,9 +144,18 @@ class UIState {
             Spacer()
 
             Button("Menu") {
+                print("[UI TEST] Menu button tapped")
                 self.buttonPressed.value = true
             }
-            .background(buttonPressed.value ? .blue : .black)
+            .onHoverStart {
+                print("[UI TEST] Menu button hover start")
+                self.buttonHovered.value = true
+            }
+            .onHoverEnd {
+                print("[UI TEST] Menu button hover end")
+                self.buttonHovered.value = false
+            }
+            .background(buttonPressed.value ? .blue : (buttonHovered.value ? .green : .black))
         }
         .padding(20)
     }

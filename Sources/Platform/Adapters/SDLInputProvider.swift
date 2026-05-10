@@ -20,7 +20,7 @@ public final class SDLInputProvider: InputProvider {
     }
 
     public func isKeyDown(_ keyCode: Int) -> Bool {
-        keyStates.contains(SDL_Scancode(Int32(keyCode)))
+        keyStates.contains(SDL_Scancode(UInt32(keyCode)))
     }
 
     //Call this from your SDL event loop
@@ -110,7 +110,7 @@ public final class SDLInputProvider: InputProvider {
             keyStates.removeAll()
             for i in 0..<Int(numKeys) {
                 if keys[i] {
-                    let sc = SDL_Scancode(Int32(i))
+                    let sc = SDL_Scancode(UInt32(i))
                     keyStates.insert(sc)
                 }
             }
