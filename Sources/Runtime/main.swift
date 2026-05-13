@@ -79,7 +79,7 @@ print("Creating UI Manager...")
 let uiManager = UIManager(graphics: graphics)
 let uiState = UIState(uiManager: uiManager)
 
-if let loadedModel = assetLoader.loadModel(at: "Assets/Models/Megaman/scene.gltf") {
+if let loadedModel = assetLoader.loadModel(at: "Assets/Models/BattleGrid/BattleGrid.gltf", flipNormals: true) {
     let model = assetLoader.createModel(from: loadedModel)
     
     // Set model to reasonable transform for viewing

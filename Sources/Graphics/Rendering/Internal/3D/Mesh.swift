@@ -50,8 +50,7 @@ public class Mesh {
     }
 
     public func draw(commandBuffer: VkCommandBuffer) {
-
-        vkCmdDrawIndexed(commandBuffer, UInt32(indexCount), 1, UInt32(indexOffset), Int32(vertexOffset), 0)
+        vkCmdDrawIndexed(commandBuffer, UInt32(indexCount), 1, 0, 0, 0)
     }
 }
 

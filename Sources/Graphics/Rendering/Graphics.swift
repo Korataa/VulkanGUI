@@ -113,10 +113,48 @@ public class Graphics {
     
     /// Render a single 3D model - used by this class internally
     private func render3DModel(_ model: Model) {
-        let pipeline = get3DPipeline()
-        if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
-            vulkanPipeline.render(models: [model])
+        let split = splitModelByCulling(model)
+
+        if let backfaceModel = split.backface {
+            let pipeline = get3DPipeline()
+            if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                vulkanPipeline.render(models: [backfaceModel])
+            }
         }
+
+        if let doubleSidedModel = split.doubleSided {
+            let pipeline = get3DDoubleSidedPipeline()
+            if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                vulkanPipeline.render(models: [doubleSidedModel])
+            }
+        }
+    }
+
+    private func splitModelByCulling(_ model: Model) -> (backface: Model?, doubleSided: Model?) {
+        var backfaceMeshes: [Mesh] = []
+        var doubleSidedMeshes: [Mesh] = []
+
+        for mesh in model.meshes {
+            let materialIndex = Int(mesh.materialID)
+            let isDoubleSided = materialIndex >= 0 && materialIndex < model.materials.count
+                ? model.materials[materialIndex].doubleSided
+                : false
+
+            if isDoubleSided {
+                doubleSidedMeshes.append(mesh)
+            } else {
+                backfaceMeshes.append(mesh)
+            }
+        }
+
+        let backfaceModel = backfaceMeshes.isEmpty
+            ? nil
+            : Model(meshes: backfaceMeshes, materials: model.materials, transform: model.transform)
+        let doubleSidedModel = doubleSidedMeshes.isEmpty
+            ? nil
+            : Model(meshes: doubleSidedMeshes, materials: model.materials, transform: model.transform)
+
+        return (backface: backfaceModel, doubleSided: doubleSidedModel)
     }
     
     /// Render multiple 3D models efficiently 
@@ -145,13 +183,37 @@ public class Graphics {
         }
 
         if !visibleModels.isEmpty {
-            let pipeline = get3DPipeline()
-            logTrace(.graphics, source: "Graphics", "Got pipeline: \(type(of: pipeline))")
-            if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
-                logTrace(.graphics, source: "Graphics", "Successfully cast to VulkanPipelineImpl, calling render()")
-                vulkanPipeline.render(models: visibleModels)
-            } else {
-                logError(.graphics, source: "Graphics", "Failed to cast pipeline to VulkanPipelineImpl")
+            var backfaceModels: [Model] = []
+            var doubleSidedModels: [Model] = []
+
+            for model in visibleModels {
+                let split = splitModelByCulling(model)
+                if let backfaceModel = split.backface {
+                    backfaceModels.append(backfaceModel)
+                }
+                if let doubleSidedModel = split.doubleSided {
+                    doubleSidedModels.append(doubleSidedModel)
+                }
+            }
+
+            if !backfaceModels.isEmpty {
+                let pipeline = get3DPipeline()
+                logTrace(.graphics, source: "Graphics", "Rendering \(backfaceModels.count) model batches with back-face culling")
+                if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                    vulkanPipeline.render(models: backfaceModels)
+                } else {
+                    logError(.graphics, source: "Graphics", "Failed to cast opaque pipeline to VulkanPipelineImpl")
+                }
+            }
+
+            if !doubleSidedModels.isEmpty {
+                let pipeline = get3DDoubleSidedPipeline()
+                logTrace(.graphics, source: "Graphics", "Rendering \(doubleSidedModels.count) models with culling disabled")
+                if let vulkanPipeline = pipeline as? VulkanPipelineImpl {
+                    vulkanPipeline.render(models: doubleSidedModels)
+                } else {
+                    logError(.graphics, source: "Graphics", "Failed to cast double-sided pipeline to VulkanPipelineImpl")
+                }
             }
         } else {
             logTrace(.graphics, source: "Graphics", "No models to render")
@@ -413,6 +475,18 @@ public class Graphics {
             blendMode: .None,
             depthTest: true,
             cullMode: .Back
+        )
+        return pipelineManager.createOrGetPipeline(desc: graphics3DDescriptor, device: renderer.logicalDevice)
+    }
+
+    private func get3DDoubleSidedPipeline() -> Pipeline {
+        let graphics3DDescriptor = PipelineDescriptor(
+            type: .Graphics3D,
+            vertexShader: "vert.spv",
+            fragmentShader: "frag.spv",
+            blendMode: .None,
+            depthTest: true,
+            cullMode: .None
         )
         return pipelineManager.createOrGetPipeline(desc: graphics3DDescriptor, device: renderer.logicalDevice)
     }

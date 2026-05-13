@@ -38,9 +38,19 @@ void main() {
     
     // Combine texture with material
     vec3 finalColor = matColor * textureColor.rgb;
-    
-    // Add a bit of ambient lighting so it's not completely black
-    finalColor = finalColor * 0.8 + vec3(0.2);
+
+    // Correct normals on backfaces when double-sided rendering is active.
+    // With culling enabled this is a no-op, but it prevents inverted lighting when culling is disabled.
+    vec3 N = normalize(normal);
+    N = gl_FrontFacing ? N : -N;
+
+    vec3 lightDelta = frameData.lightPos - fragPos;
+    float lightLen = length(lightDelta);
+    vec3 L = lightLen > 1e-5 ? (lightDelta / lightLen) : vec3(0.0, 1.0, 0.0);
+    float lambert = max(dot(N, L), 0.0);
+
+    // Additive ambient prevents fully black surfaces when texture/light data is weak.
+    finalColor = finalColor * (0.7 + 0.3 * lambert) + vec3(0.2);
     
     outColor = vec4(finalColor, 1.0);
 }

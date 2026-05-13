@@ -29,7 +29,7 @@ public class AssetLoader {
         self.resourceManager = resourceManager
     }
 
-    public func loadModel(at path: String) -> LoadedModel? {
+    public func loadModel(at path: String, flipNormals: Bool = false) -> LoadedModel? {
         //need this for stuff below
         let basePath = (path as NSString).deletingLastPathComponent
 
@@ -112,6 +112,8 @@ public class AssetLoader {
                 material.roughnessFactor = pbr.roughness_factor
             }
 
+            material.doubleSided = mat.double_sided != 0
+
             //Add textures - check specular-glossiness extension first
             if mat.has_pbr_specular_glossiness != 0 {
                 // Use diffuse texture from specular-glossiness extension
@@ -179,16 +181,18 @@ public class AssetLoader {
             materials.append(material)
         }
 
-        // --- 5. Load node transforms (not used currently) ---
+        // --- 5. Load node transforms and bake into mesh vertices ---
         var nodeTransforms: [Matrix4x4] = []
+        var nodeTransformMap: [Int: Matrix4x4] = [:]
         for i in 0..<dataVal.nodes_count {
             let node = dataVal.nodes[i]
             let transform = nodeToMatrix(node)
             nodeTransforms.append(transform)
+            nodeTransformMap[Int(i)] = transform
         }
 
         // --- 6. (Finally) load mesh data and upload to buffers ---
-        guard let meshes = loadMeshes(from: dataVal) else {
+        guard let meshes = loadMeshes(from: dataVal, nodeTransformMap: nodeTransformMap, flipNormals: flipNormals) else {
             return nil
         }
 
@@ -200,7 +204,7 @@ public class AssetLoader {
         )
     }
 
-    private func loadMeshes(from dataVal: cgltf_data) -> [LoadedMesh]? {
+    private func loadMeshes(from dataVal: cgltf_data, nodeTransformMap: [Int: Matrix4x4], flipNormals: Bool = false) -> [LoadedMesh]? {
         guard resourceManager.staticVertexBuffer != nil,
               resourceManager.indexBuffer != nil else {
             if resourceManager.staticVertexBuffer == nil {
@@ -213,12 +217,66 @@ public class AssetLoader {
             return nil
         }
 
+        // Build node-to-mesh mapping (which node uses which mesh)
+        var nodeToMesh: [Int: Int] = [:]
+        for nodeIdx in 0..<dataVal.nodes_count {
+            let node = dataVal.nodes[nodeIdx]
+            if let meshPtr = node.mesh {
+                let meshIdx = Int(meshPtr - dataVal.meshes)
+                nodeToMesh[nodeIdx] = meshIdx
+            }
+        }
+
         var meshes: [LoadedMesh] = []
         for i in 0..<dataVal.meshes_count {
             let mesh = dataVal.meshes[i]
+            
+            // Find which node(s) use this mesh to get the transform
+            var meshTransform: Matrix4x4? = nil
+            for (nodeIdx, meshIdx) in nodeToMesh {
+                if meshIdx == i {
+                    meshTransform = nodeTransformMap[nodeIdx]
+                    break
+                }
+            }
+            
             for j in 0..<mesh.primitives_count {
                 let prim = mesh.primitives[j]
-                let (positions, normals, texCoords) = extractVertexAttributes(from: prim)
+                var (positions, normals, texCoords) = extractVertexAttributes(from: prim)
+                
+                // Flip normals if needed (for incorrectly exported glTF files)
+                if flipNormals {
+                    normals = normals.map { norm in
+                        return SIMD3<Float>(-norm.x, -norm.y, -norm.z)
+                    }
+                }
+                
+                // Apply node transform to vertex positions and normals if this mesh has a transform
+                if let transform = meshTransform {
+                    // DISABLED FOR DEBUG - verify geometry is clean at origin
+                    /*
+                    // Transform positions (use full 4x4 matrix for translation)
+                    positions = positions.map { pos in
+                        let pos4 = SIMD4<Float>(pos.x, pos.y, pos.z, 1.0)
+                        let transformed = transform * pos4
+                        return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+                    }
+                    
+                    // Transform normals (use 3x3 rotation part only, then normalize)
+                    normals = normals.map { norm in
+                        let normVec = Vector3(norm.x, norm.y, norm.z)
+                        // Extract 3x3 rotation and apply to normal
+                        let rotated = Vector3(
+                            transform[0].x * normVec.x + transform[0].y * normVec.y + transform[0].z * normVec.z,
+                            transform[1].x * normVec.x + transform[1].y * normVec.y + transform[1].z * normVec.z,
+                            transform[2].x * normVec.x + transform[2].y * normVec.y + transform[2].z * normVec.z
+                        )
+                        let normalized = rotated.normalize()
+                        return SIMD3<Float>(normalized.x, normalized.y, normalized.z)
+                    }
+                    */
+                }
+                
                 let (vertices, minBounds, maxBounds) = buildVerticesAndBounds(
                     positions: positions,
                     normals: normals,
@@ -236,9 +294,9 @@ public class AssetLoader {
                     }
 
                     meshes.append(LoadedMesh(
-                        vertexOffset: vertexRegion.offset,
+                        vertexOffset: vertexRegion.offset / MemoryLayout<Vertex3D>.stride,
                         vertexCount: vertices.count,
-                        indexOffset: indexRegion.offset,
+                        indexOffset: indexRegion.offset / MemoryLayout<UInt32>.stride,
                         indexCount: indices.count,
                         materialIndex: prim.material != nil ? Int(prim.material - dataVal.materials) : nil,
                         bounds: (min: minBounds, max: maxBounds)
@@ -271,7 +329,9 @@ public class AssetLoader {
                 stride = Int(bufferView.stride)
             } else if attr.type == cgltf_attribute_type_position {
                 stride = 3 * MemoryLayout<Float>.stride
-            } else {
+                } else if attr.type == cgltf_attribute_type_normal {
+                    stride = 3 * MemoryLayout<Float>.stride
+                } else {
                 stride = 2 * MemoryLayout<Float>.stride
             }
 
@@ -397,31 +457,22 @@ func nodeToMatrix(_ node: cgltf_node) -> Matrix4x4 {
             m.8, m.9, m.10, m.11,
             m.12, m.13, m.14, m.15
         )
-    } else {
-        //Node has translation, rotation, and scale
-        let position = Vector3(
-            node.translation.0,
-            node.translation.1,
-            node.translation.2
-        )
-
-        let rotation = Quaternion(
-            node.rotation.0,
-            node.rotation.1,
-            node.rotation.2,
-            node.rotation.3
-        )
-
-        let scale = Vector3(
-            node.scale.0,
-            node.scale.1,
-            node.scale.2
-        )
-
-        let transform = Transform(position: position, rotation: rotation, scale: scale)
-
-        return transform.modelMatrix
     }
+
+    let position = node.has_translation != 0
+        ? Vector3(node.translation.0, node.translation.1, node.translation.2)
+        : Vector3(0, 0, 0)
+
+    let rotation = node.has_rotation != 0
+        ? Quaternion(node.rotation.0, node.rotation.1, node.rotation.2, node.rotation.3)
+        : Quaternion.identity()
+
+    let scale = node.has_scale != 0
+        ? Vector3(node.scale.0, node.scale.1, node.scale.2)
+        : Vector3(1, 1, 1)
+
+    let transform = Transform(position: position, rotation: rotation, scale: scale)
+    return transform.modelMatrix
 }
 
 func loadImageData(from image: cgltf_image, basePath: String) -> Data? {

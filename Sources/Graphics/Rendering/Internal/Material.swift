@@ -105,6 +105,7 @@ public final class Material: Hashable {
     // Alpha mode
     public var alphaCutoff: Float = 0.5
     public var isOpaque: Bool = true 
+    public var doubleSided: Bool = false
 
     public init() {
         // All properties have default values, so empty init is sufficient
@@ -126,7 +127,8 @@ public final class Material: Hashable {
               lhs.emissiveColor == rhs.emissiveColor,
               lhs.emissiveTextureIndex == rhs.emissiveTextureIndex,
               lhs.alphaCutoff == rhs.alphaCutoff,
-              lhs.isOpaque == rhs.isOpaque else { return false }
+              lhs.isOpaque == rhs.isOpaque,
+              lhs.doubleSided == rhs.doubleSided else { return false }
         
         // Compare custom parameters
         // Only compare hashable values, ignore non-hashable ones for equality
@@ -161,6 +163,7 @@ public final class Material: Hashable {
         hasher.combine(emissiveTextureIndex)
         hasher.combine(alphaCutoff)
         hasher.combine(isOpaque)
+        hasher.combine(doubleSided)
         
         // Hash custom parameters (only hashable values)
         for (key, value) in customParameters.sorted(by: { $0.key < $1.key }) {
