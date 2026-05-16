@@ -13,6 +13,7 @@ public class VulkanTextureManager {
     
     // Texture storage
     private var textures: [VulkanTexture] = []
+    private var defaultTextureIndex: Int? = nil
     private var sampler: VkSampler?
     private var clampSampler: VkSampler?
     
@@ -40,8 +41,28 @@ public class VulkanTextureManager {
             print("Failed to create clamp texture sampler")
             return false
         }
+
+        guard ensureDefaultTexture() else {
+            print("Failed to create default fallback texture")
+            return false
+        }
         
         print("VulkanTextureManager initialized successfully")
+        return true
+    }
+
+    private func ensureDefaultTexture() -> Bool {
+        if defaultTextureIndex != nil {
+            return true
+        }
+
+        let whitePixel: [UInt8] = [255, 255, 255, 255]
+        let index = createTextureRGBA(width: 1, height: 1, pixels: whitePixel, srgb: true)
+        guard index >= 0 else {
+            return false
+        }
+
+        defaultTextureIndex = index
         return true
     }
     
@@ -586,7 +607,11 @@ public class VulkanTextureManager {
     }
     
     public func getDefaultTexture() -> VulkanTexture? {
-        // Return first texture as default, or create a white texture if none exist
+        if let defaultTextureIndex,
+           defaultTextureIndex >= 0,
+           defaultTextureIndex < textures.count {
+            return textures[defaultTextureIndex]
+        }
         return textures.first
     }
     

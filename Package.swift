@@ -42,6 +42,10 @@ let package = Package(
         .executable(
             name: "DeckRPG",
             targets: ["DeckRPG"]
+        ),
+        .executable(
+            name: "Editor", 
+            targets: ["Editor"]
         )
     ],
     targets: [
@@ -176,7 +180,16 @@ let package = Package(
         .executableTarget(
             name: "DeckRPG",
             dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI", "Logging"],
-            path: "Sources/Runtime",
+            path: "Sources/GameRuntime",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
+        ),
+
+        .executableTarget(
+            name: "Editor",
+            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI", "Logging"],
+            path: "Sources/EditorRuntime",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]

@@ -147,6 +147,7 @@ class VulkanRenderer {
     )
     private var currentUITextureIndex: Int? = nil
     private var uiTextUsesMSDF: Bool = false
+    private var uiMaterialDescriptorDirty: Bool = true
     
     // Texture management
     var textureManager: VulkanTextureManager? = nil
@@ -2058,7 +2059,7 @@ same here 0       1
         }
 
         vkUpdateDescriptorSets(logicalDevice, 1, &uiProjectionDescriptorWrite, 0, nil)
-        print("Updated UI projection descriptor set")
+        //print("Updated UI projection descriptor set")
     }
 
     private func updateUIMaterialDescriptorSet() {
@@ -2183,33 +2184,33 @@ same here 0       1
             currentUIMaterial.reserved1 = 1.0
             currentUIMaterial.reserved2 = uiTextUsesMSDF ? 1.0 : 0.0
         }
-        updateUIMaterialDescriptorSet()
+        uiMaterialDescriptorDirty = true
     }
 
     // Toggle between readable fallback mode (false) and true SDF reconstruction mode (true).
     func setUITextTrueSDFMode(_ enabled: Bool) {
         currentUIMaterial.reserved1 = enabled ? 1.0 : 0.0
         print("UI text mode: \(enabled ? "TrueSDF" : "FallbackReadable")")
-        updateUIMaterialDescriptorSet()
+        uiMaterialDescriptorDirty = true
     }
 
     func setUITextSDFStepDebugMode(_ enabled: Bool) {
         currentUIMaterial.reserved2 = enabled ? 1.0 : 0.0
         print("UI text SDF step-debug: \(enabled ? "ON" : "OFF")")
-        updateUIMaterialDescriptorSet()
+        uiMaterialDescriptorDirty = true
     }
 
     func setUITextMSDFMode(_ enabled: Bool) {
         uiTextUsesMSDF = enabled
         print("UI text sampling mode: \(enabled ? "MSDF" : "SDF")")
-        updateUIMaterialDescriptorSet()
+        uiMaterialDescriptorDirty = true
     }
 
     func setUITextSDFParameters(threshold: Float, range: Float) {
         currentUIMaterial.sdfThreshold = threshold
         currentUIMaterial.sdfRange = max(0.001, range)
         print("UI text SDF params: threshold=\(threshold), range=\(currentUIMaterial.sdfRange)")
-        updateUIMaterialDescriptorSet()
+        uiMaterialDescriptorDirty = true
     }
 
     // REMOVED: Old updateMaterialDescriptorSet(for pipelineType: PipelineType)
@@ -2900,7 +2901,10 @@ same here 0       1
         
         // Update UI descriptor sets
         updateUIProjectionDescriptorSet()
-        updateUIMaterialDescriptorSet()
+        if uiMaterialDescriptorDirty {
+            updateUIMaterialDescriptorSet()
+            uiMaterialDescriptorDirty = false
+        }
         
         beginRenderPass(imageIndex: imageIndex)
         return imageIndex
@@ -2951,6 +2955,7 @@ same here 0       1
         presentInfo.pImageIndices = withUnsafePointer(to: imageIndex) { $0 }
         
         let presentResult = vkQueuePresentKHR(queueManager?.presentQueue, &presentInfo)
+        _ = vkQueueWaitIdle(queueManager?.presentQueue)
         
         if presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR {
             recreateSwapchain()
