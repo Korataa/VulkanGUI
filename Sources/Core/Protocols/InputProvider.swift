@@ -6,7 +6,7 @@ public protocol InputProvider {
     func isMouseButtonDown(_ button: Int) -> Bool
 
     //Keyboard
-    func isKeyDown(_ keyCode: Int) -> Bool
+    func isKeyDown(_ key: Key) -> Bool
 
     //Polling (maybe we wont use this? idk)
     func update()

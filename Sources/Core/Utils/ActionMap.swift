@@ -1,19 +1,19 @@
 public final class ActionMap<Action: Hashable> {
-    private var bindings: [Action: Set<Int>] = [:]
+    private var bindings: [Action: Set<Key>] = [:]
     private var currentState: [Action: Bool] = [:]
     private var previousState: [Action: Bool] = [:]
 
     public init() {}
 
-    public func bind(_ action: Action, to keyCode: Int) {
-        bindings[action, default: []].insert(keyCode)
+    public func bind(_ action: Action, to key: Key) {
+        bindings[action, default: []].insert(key)
         currentState[action] = currentState[action] ?? false
         previousState[action] = previousState[action] ?? false
     }
 
-    public func bind(_ action: Action, to keyCodes: [Int]) {
-        for keyCode in keyCodes {
-            bind(action, to: keyCode)
+    public func bind(_ action: Action, to keys: [Key]) {
+        for key in keys {
+            bind(action, to: key)
         }
     }
 
@@ -26,8 +26,8 @@ public final class ActionMap<Action: Hashable> {
     public func update(input: InputProvider) {
         previousState = currentState
 
-        for (action, keyCodes) in bindings {
-            currentState[action] = keyCodes.contains { input.isKeyDown($0) }
+        for (action, keys) in bindings {
+            currentState[action] = keys.contains { input.isKeyDown($0) }
         }
     }
 
