@@ -1,3 +1,0 @@
-1. Convert the remaining high-volume print(...) hotspots to logTrace/logDebug/logInfo
-
-2. Add more categories if you want finer separation, like render, audio, scene, gameplay

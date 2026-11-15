@@ -32,7 +32,7 @@ public class EventManager {
                 
                 case Int32(SDL_EVENT_WINDOW_RESIZED.rawValue):
                     print("Window has been resized!")
-                    resizeCallback!()
+                    resizeCallback?()
 
                 default:
                     break

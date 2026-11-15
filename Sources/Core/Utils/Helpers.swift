@@ -68,6 +68,9 @@ struct Config: Decodable {
 }
 
 public func getAssetsPath() -> String? {
+    if let path = ProcessInfo.processInfo.environment["DECKRPGUI_ASSETS"], !path.isEmpty {
+        return path
+    }
     let configURL = URL(fileURLWithPath: "config.json")
 
     do {

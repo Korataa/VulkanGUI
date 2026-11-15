@@ -6,7 +6,6 @@ import Logging
 //High level pipeline types
 public enum PipelineType {
     case Graphics2D
-    case Graphics3D
     case PostProcessing
     case Compute
     case UI
@@ -98,7 +97,6 @@ final class VulkanPipelineImpl: Pipeline {
 
     //Descriptor sets for this pipeline
     private var frameDescriptorSet: VkDescriptorSet?
-    private var transformDescriptorSet: VkDescriptorSet?
     private var materialDescriptorSet: VkDescriptorSet?
 
     init(descriptor: PipelineDescriptor, device: VkDevice?, renderer: VulkanRenderer) {
@@ -147,8 +145,6 @@ final class VulkanPipelineImpl: Pipeline {
     // Helper methods to convert high-level descriptor to Vulkan specifics
     private func getShaderPaths(for type: PipelineType) -> (vertex: String, fragment: String) {
         switch type {
-        case .Graphics3D:
-            return ("vert.spv", "frag.spv")
         case .Graphics2D:
             return ("shader2d_vert.spv", "shader2d_frag.spv")
         case .UI:
@@ -162,8 +158,6 @@ final class VulkanPipelineImpl: Pipeline {
     
     private func getVertexInputType(for type: PipelineType) -> String {
         switch type {
-        case .Graphics3D:
-            return "Vertex3D"
         case .Graphics2D, .UI, .UITextSDF:
             return "Vertex2D"
         case .PostProcessing, .Compute:
@@ -173,8 +167,6 @@ final class VulkanPipelineImpl: Pipeline {
     
     private func getDescriptorSetLayouts(for type: PipelineType) -> [VkDescriptorSetLayout?] {
         switch type {
-        case .Graphics3D:
-            return [vulkanRenderer.frameSetLayout, vulkanRenderer.transformSetLayout, vulkanRenderer.materialSetLayout3D]
         case .Graphics2D:
             return [vulkanRenderer.transform2DSetLayout, vulkanRenderer.material2DSetLayout]
         case .UI, .UITextSDF:
@@ -215,19 +207,12 @@ final class VulkanPipelineImpl: Pipeline {
     private func createDescriptorSets() {
         //Create descriptor sets based on pipeline type
         switch descriptor.type {
-        case .Graphics3D:
-            frameDescriptorSet = vulkanRenderer.frameDescriptorSet
-            transformDescriptorSet = vulkanRenderer.transformDescriptorSet
-            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
         case .Graphics2D:
-            frameDescriptorSet = vulkanRenderer.frameDescriptorSet
-            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
+            frameDescriptorSet = vulkanRenderer.transform2DDescriptorSet
+            materialDescriptorSet = vulkanRenderer.material2DDescriptorSet
         case .UI, .UITextSDF:
             frameDescriptorSet = vulkanRenderer.uiProjectionDescriptorSet
-            materialDescriptorSet = vulkanRenderer.uiMaterialDescriptorSet
-        case .PostProcessing:
-            materialDescriptorSet = vulkanRenderer.materialDescriptorSet
-        case .Compute:
+        case .PostProcessing, .Compute:
             break
         }
     }
@@ -246,30 +231,16 @@ final class VulkanPipelineImpl: Pipeline {
 
     private func bindDescriptorSetsForPipeline(layout: VkPipelineLayout) {
         switch descriptor.type {
-        case .Graphics3D:
-            // For 3D graphics, bind frame (set 0) and material (set 2) descriptor sets only
-            // The transform descriptor set (set 1) will be bound by drawModelsWithDynamicOffsets with proper per-model offsets
-            if let frameSet = frameDescriptorSet {
-                logTrace(.vulkan, source: "Pipeline", "Binding frame descriptor set (set 0): \(frameSet)")
-                vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: [frameSet], dynamicOffsets: [])
-            } else {
-                logError(.vulkan, source: "Pipeline", "No frame descriptor set available")
+        case .Graphics2D:
+            guard let frameSet = frameDescriptorSet, let materialSet = materialDescriptorSet else {
+                fatalError("2D descriptor sets not allocated")
             }
-            if let materialSet = materialDescriptorSet {
-                logTrace(.vulkan, source: "Pipeline", "Binding material descriptor set (set 2): \(materialSet)")
-                vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 2, sets: [materialSet], dynamicOffsets: [])
-            } else {
-                logError(.vulkan, source: "Pipeline", "No material descriptor set available")
+            vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: [frameSet, materialSet])
+        case .UI, .UITextSDF:
+            guard let projectionSet = frameDescriptorSet else {
+                fatalError("UI projection descriptor set not allocated")
             }
-        case .Graphics2D, .UI, .UITextSDF:
-            // For 2D/UI, bind all sets together since they don't need per-model dynamic offsets
-            var descriptorSets: [VkDescriptorSet] = []
-            if let frameSet = frameDescriptorSet { descriptorSets.append(frameSet) }
-            if let materialSet = materialDescriptorSet { descriptorSets.append(materialSet) }
-            
-            if !descriptorSets.isEmpty {
-                vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: descriptorSets, dynamicOffsets: [])
-            }
+            vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: [projectionSet])
         case .PostProcessing:
             if let materialSet = materialDescriptorSet {
                 vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 0, sets: [materialSet], dynamicOffsets: [])
@@ -279,23 +250,8 @@ final class VulkanPipelineImpl: Pipeline {
         }
     }
 
-    func render(models: [Model]) {
-        logTrace(.graphics, source: "Pipeline", "VulkanPipelineImpl.render called with \(models.count) models")
-        // Bind this pipeline and its descriptor sets
-        bind()
-        
-        // Draw all models with proper dynamic offset handling
-        guard let layout = pipelineLayout, let transformSet = transformDescriptorSet else {
-            logError(.graphics, source: "Pipeline", "Missing pipeline layout or transform descriptor set")
-            return
-        }
-        logTrace(.graphics, source: "Pipeline", "About to call drawModelsWithDynamicOffsets with \(models.count) models")
-        vulkanRenderer.drawModelsWithDynamicOffsets(models, pipelineLayout: layout, transformDescriptorSet: transformSet)
-    }
-    
-    /// Clean UI rendering that mirrors 3D model rendering
-    /// Uses 2D buffers and existing UI descriptor sets
-    func renderUI(models: [ModelUI]) {
+    /// Render UI models using 2D buffers and the selected batch material.
+    func renderUI(models: [ModelUI], materialSet: VkDescriptorSet) {
         logTrace(.ui, source: "Pipeline", "VulkanPipelineImpl.renderUI called with \(models.count) UI models")
         // Bind this UI pipeline and its descriptor sets
         bind()
@@ -305,6 +261,7 @@ final class VulkanPipelineImpl: Pipeline {
             logError(.ui, source: "Pipeline", "Missing pipeline layout")
             return
         }
+        vulkanRenderer.bindDescriptorSets(pipelineLayout: layout, firstSet: 1, sets: [materialSet])
         logTrace(.ui, source: "Pipeline", "About to call drawUIModelsWithOffsets with \(models.count) UI models")
         vulkanRenderer.drawUIModelsWithOffsets(models, pipelineLayout: layout)
     }

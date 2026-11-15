@@ -4,14 +4,79 @@ import Graphics
 import Math
 import Logging
 
+protocol UIRendering: AnyObject {
+    func replaceUIElements(in group: UIElementGroup, with elements: [Renderable2D])
+    func createUITextureRGBA(width: Int, height: Int, pixels: [UInt8], srgb: Bool) -> UInt32?
+    func createUITextureR8(width: Int, height: Int, pixels: [UInt8]) -> UInt32?
+    func setUITextSDFParameters(threshold: Float, range: Float)
+    func setUITextTrueSDFMode(_ enabled: Bool)
+    func setUITextMSDFMode(_ enabled: Bool)
+}
+
+extension Graphics: UIRendering {}
+
 public class UIManager {
     private struct HitTestResult {
         let element: Element
         let interactionID: String
     }
 
-    private var graphics: Graphics
+    private final class Node {
+        var element: Element
+        let region: ReactiveRegion?
+        let replacesElement: Bool
+        var children: [Node]
+        var layouted: Element?
+        var ownRenderables: [Renderable2D] = []
+        var renderables: [Renderable2D] = []
+        var needsOwnRender = true
+        var needsUpdate = true
+        weak var parent: Node?
+
+        init(_ element: Element, parent: Node? = nil) {
+            self.element = element
+            self.parent = parent
+            if let binding = element.reactiveText {
+                self.region = ReactiveRegion {
+                    var resolved = element
+                    resolved.reactiveText = nil
+                    let text = binding()
+                    if case .text(_, let font) = resolved.elementType {
+                        resolved.elementType = .text(content: text, font: font)
+                    } else {
+                        resolved.elementType = .text(content: text, font: Font.system(size: 14))
+                    }
+                    return resolved
+                }
+                self.replacesElement = true
+                self.children = []
+            } else if let content = element.dynamicContent {
+                self.region = ReactiveRegion(content)
+                self.replacesElement = false
+                self.children = []
+            } else {
+                self.region = nil
+                self.replacesElement = false
+                self.children = []
+            }
+            region?.onInvalidate = { [weak self] in self?.invalidate() }
+            if region == nil {
+                children = element.children.map { Node($0, parent: self) }
+            }
+        }
+
+        func invalidate() {
+            if !needsUpdate {
+                needsUpdate = true
+                parent?.invalidate()
+            }
+        }
+    }
+
+    private var graphics: any UIRendering
+    private let elementGroup = UIElementGroup()
     private var rootElement: Element?
+    private var rootNode: Node?
     private var layoutedRootElement: Element?
     private var needsRebuild: Bool = true
     private var screenBounds: Rectangle = Rectangle(position: Vector2(0, 0), width: 800, height: 600)
@@ -39,6 +104,10 @@ public class UIManager {
         self.graphics = graphics
     }
 
+    init(renderer: any UIRendering) {
+        self.graphics = renderer
+    }
+
     public func setRoot(_ element: Element) {
         rootElement = element
         needsRebuild = true
@@ -46,7 +115,6 @@ public class UIManager {
 
     public func setScreenBounds(_ bounds: Rectangle) {
         screenBounds = bounds
-        needsRebuild = true
     }
 
     public func update() {
@@ -56,8 +124,14 @@ public class UIManager {
         }
         if needsRebuild {
             logDebug(.ui, source: "UIManager", "UI rebuilding")
-            rebuild()
+            rootNode = rootElement.map { Node($0) }
+            hasAnimatedTextGlow = false
             needsRebuild = false
+        }
+        guard let rootNode else { return }
+        if updateNode(rootNode, in: screenBounds, layout: true) {
+            layoutedRootElement = rootNode.layouted
+            updateGraphics(rootNode.renderables)
         }
     }
 
@@ -65,47 +139,24 @@ public class UIManager {
         needsRebuild = true
     }
 
-    private func rebuild() {
-        guard let root = rootElement else { return }
-        hasAnimatedTextGlow = false
-        let layoutedRoot = performLayout(root, in: screenBounds)
-        layoutedRootElement = layoutedRoot
-        let newRenderables = generateRenderables(from: layoutedRoot)
+    private func updateGraphics(_ newRenderables: [Renderable2D]) {
         if hasInitializedUI && renderablesEqual(cachedRenderables, newRenderables) {
             logTrace(.ui, source: "UIManager", "UI unchanged - reusing cached renderables")
             return
         }
         logDebug(.ui, source: "UIManager", "UI changed - updating graphics (\(newRenderables.count) elements)")
-        graphics.clearUIElements()
-        if hasInitializedUI {
-            let reusedRenderables = reuseCompatibleRenderables(cachedRenderables, newRenderables)
-            reusedRenderables.forEach { graphics.addUIElement($0) }
-            cachedRenderables = reusedRenderables
-        } else {
-            newRenderables.forEach { graphics.addUIElement($0) }
-            cachedRenderables = newRenderables
-            hasInitializedUI = true
-        }
+        let renderables = hasInitializedUI
+            ? reuseCompatibleRenderables(cachedRenderables, newRenderables)
+            : newRenderables
+        graphics.replaceUIElements(in: elementGroup, with: renderables)
+        cachedRenderables = renderables
+        hasInitializedUI = true
         logTrace(.ui, source: "UIManager", "UI update complete")
     }
 
     private func renderablesEqual(_ a: [Renderable2D], _ b: [Renderable2D]) -> Bool {
         guard a.count == b.count else { return false }
-        for (i, renderable) in a.enumerated() {
-            let other = b[i]
-            if renderable.position != other.position ||
-               renderable.size != other.size ||
-               !colorsEqual(renderable.color, other.color) ||
-               renderable.textureID != other.textureID ||
-               renderable.usesSDF != other.usesSDF ||
-               renderable.sdfThreshold != other.sdfThreshold ||
-               renderable.sdfRange != other.sdfRange ||
-               renderable.outlineWidth != other.outlineWidth ||
-               !colorsEqual(renderable.outlineColor, other.outlineColor) {
-                return false
-            }
-        }
-        return true
+        return zip(a, b).allSatisfy { Self.renderablesMatch($0, $1) }
     }
 
     private func reuseCompatibleRenderables(_ existing: [Renderable2D], _ new: [Renderable2D]) -> [Renderable2D] {
@@ -116,15 +167,7 @@ public class UIManager {
             let existingRenderable = existing[i]
             
             // If they're the same, reuse the existing one (preserves upload state)
-            if existingRenderable.position == newRenderable.position &&
-               existingRenderable.size == newRenderable.size &&
-               colorsEqual(existingRenderable.color, newRenderable.color) &&
-               existingRenderable.textureID == newRenderable.textureID &&
-                    existingRenderable.usesSDF == newRenderable.usesSDF &&
-                    existingRenderable.sdfThreshold == newRenderable.sdfThreshold &&
-                    existingRenderable.sdfRange == newRenderable.sdfRange &&
-                    existingRenderable.outlineWidth == newRenderable.outlineWidth &&
-                    colorsEqual(existingRenderable.outlineColor, newRenderable.outlineColor) {
+            if Self.renderablesMatch(existingRenderable, newRenderable) {
                 reused.append(existingRenderable)
             } else {
                 // Different - use the new one
@@ -134,72 +177,102 @@ public class UIManager {
         return reused
     }
 
-    private func colorsEqual(_ a: Color, _ b: Color) -> Bool {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a
+    static func renderablesMatch(_ a: Renderable2D, _ b: Renderable2D) -> Bool {
+        guard a.position == b.position, a.size == b.size, a.color == b.color,
+              a.textureID == b.textureID, a.usesSDF == b.usesSDF,
+              a.sdfThreshold == b.sdfThreshold, a.sdfRange == b.sdfRange,
+              a.outlineWidth == b.outlineWidth, a.outlineColor == b.outlineColor,
+              a.glowColor == b.glowColor, a.glowWidth == b.glowWidth,
+              a.shadowColor == b.shadowColor, a.shadowOffset == b.shadowOffset,
+              a.indices == b.indices, a.vertices.count == b.vertices.count else {
+            return false
+        }
+        return zip(a.vertices, b.vertices).allSatisfy {
+            $0.position == $1.position && $0.texCoord == $1.texCoord && $0.color == $1.color
+        }
     }
 
-    /// Layout algorithm - calculates final bounds for all elements
-    private func performLayout(_ element: Element, in bounds: Rectangle) -> Element {
-        var layoutedElement = element
-        layoutedElement.bounds = bounds
-        
-        // Simple layout for now - we'll enhance this
-        switch element.layoutType {
-        case .flex(let direction, _, _):
-            layoutedElement.children = layoutFlexChildren(element.children, 
-                                                        direction: direction, 
-                                                        in: bounds, 
-                                                        spacing: element.spacing)
-        case .absolute(let position):
-            layoutedElement.bounds = Rectangle(position: position, width: bounds.width, height: bounds.height)
-        case .grid:
-            // Grid layout - implement later
-            layoutedElement.children = element.children
+    private func updateNode(_ node: Node, in proposedBounds: Rectangle, layout: Bool) -> Bool {
+        var bounds = layout ? proposedBounds : node.element.bounds
+        if layout, case .absolute(let position) = node.element.layoutType {
+            bounds.position = position
         }
-        
-        return layoutedElement
-    }
-    
-    /// Simple flex layout implementation
-    private func layoutFlexChildren(_ children: [Element], 
-                                  direction: FlexDirection, 
-                                  in bounds: Rectangle, 
-                                  spacing: Float) -> [Element] {
-        guard !children.isEmpty else { return [] }
-        
-        var layoutedChildren: [Element] = []
-        
-        if direction == .column {
-            // Vertical layout
-            let childHeight = (bounds.height - spacing * Float(children.count - 1)) / Float(children.count)
-            var currentY = bounds.position.y
-            
-            for child in children {
-                var layoutedChild = child
-                layoutedChild.bounds = Rectangle(position: Vector2(bounds.position.x, currentY), width: bounds.width, height: childHeight)
-                layoutedChild = performLayout(layoutedChild, in: layoutedChild.bounds)
-                layoutedChildren.append(layoutedChild)
-                currentY += childHeight + spacing
-            }
-        } else {
-            // Horizontal layout  
-            let childWidth = (bounds.width - spacing * Float(children.count - 1)) / Float(children.count)
-            var currentX = bounds.position.x
-            
-            for child in children {
-                var layoutedChild = child
-                layoutedChild.bounds = Rectangle(position: Vector2(currentX, bounds.position.y), width: childWidth, height: bounds.height)
-                layoutedChild = performLayout(layoutedChild, in: layoutedChild.bounds)
-                layoutedChildren.append(layoutedChild)
-                currentX += childWidth + spacing
+        guard node.needsUpdate || !sameBounds(node.layouted?.bounds, bounds) else { return false }
+        node.needsUpdate = false
+
+        if let region = node.region, region.isDirty {
+            let content = region.evaluate()
+            if node.replacesElement {
+                node.element = content
+                node.children = content.children.map { Node($0, parent: node) }
+                node.needsOwnRender = true
+            } else {
+                node.children = [Node(content, parent: node)]
             }
         }
-        
-        return layoutedChildren
+
+        bounds = layout ? proposedBounds : node.element.bounds
+        if layout, case .absolute(let position) = node.element.layoutType {
+            bounds.position = position
+        }
+        let ownChanged = node.needsOwnRender || !sameBounds(node.layouted?.bounds, bounds)
+
+        var childrenChanged = false
+        let count = node.children.count
+        var currentX = bounds.position.x
+        var currentY = bounds.position.y
+        for child in node.children {
+            var childBounds = child.element.bounds
+            var layoutChild = false
+            if layout, case .flex(let direction, _, _) = node.element.layoutType {
+                layoutChild = true
+                if direction == .column {
+                    let height = (bounds.height - node.element.spacing * Float(count - 1)) / Float(count)
+                    childBounds = Rectangle(
+                        position: Vector2(bounds.position.x, currentY),
+                        width: bounds.width, height: height
+                    )
+                    currentY += height + node.element.spacing
+                } else {
+                    let width = (bounds.width - node.element.spacing * Float(count - 1)) / Float(count)
+                    childBounds = Rectangle(
+                        position: Vector2(currentX, bounds.position.y),
+                        width: width, height: bounds.height
+                    )
+                    currentX += width + node.element.spacing
+                }
+            }
+            if updateNode(child, in: childBounds, layout: layoutChild) {
+                childrenChanged = true
+            }
+        }
+
+        guard ownChanged || childrenChanged else { return false }
+        var layouted = node.element
+        layouted.bounds = bounds
+        layouted.children = node.children.compactMap(\.layouted)
+        node.layouted = layouted
+        if ownChanged || (childrenChanged && isCustom(node.element)) {
+            node.ownRenderables = generateOwnRenderables(from: layouted)
+            node.needsOwnRender = false
+        }
+        node.renderables = node.ownRenderables + node.children.flatMap(\.renderables)
+        return true
     }
-    
-    /// Convert layouted elements to UIRenderables
-    private func generateRenderables(from element: Element) -> [Renderable2D] {
+
+    private func isCustom(_ element: Element) -> Bool {
+        if case .custom = element.elementType { return true }
+        return false
+    }
+
+    private func sameBounds(_ previous: Rectangle?, _ current: Rectangle) -> Bool {
+        guard let previous else { return false }
+        return previous.position.x == current.position.x && previous.position.y == current.position.y &&
+            previous.width == current.width && previous.height == current.height
+    }
+
+    /// Convert one layouted element to its renderables.
+    private func generateOwnRenderables(from element: Element) -> [Renderable2D] {
         var renderables: [Renderable2D] = []
         
         // Generate renderable for this element
@@ -387,11 +460,6 @@ public class UIManager {
                 )
                 renderables.append(renderable)
             }
-        }
-        
-        // Recursively generate renderables for children
-        for child in element.children {
-            renderables.append(contentsOf: generateRenderables(from: child))
         }
         
         return renderables

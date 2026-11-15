@@ -12,8 +12,6 @@ public protocol Shader: Resource {
     //Set material properties and textures
     func setMaterial(_ material: Material) throws
 
-    //Set transform matrices (model, view, projection)
-    func setTransform(model: Matrix4x4, view: Matrix4x4, projection: Matrix4x4)
 }
 
 public enum ShaderError: Error {

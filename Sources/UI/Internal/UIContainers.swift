@@ -31,6 +31,13 @@ public struct UIBuilder {
 
 // MARK: - Layout Containers
 
+/// Rebuilds this region when reactive values read by its closure change.
+public func Dynamic(_ content: @escaping () -> Element) -> Element {
+    var element = Element(type: .container)
+    element.dynamicContent = content
+    return element
+}
+
 /// Vertical stack layout container
 public func Column(spacing: Float = 8, @UIBuilder content: () -> [Element]) -> Element {
     return Element(type: ElementType.container, children: content())

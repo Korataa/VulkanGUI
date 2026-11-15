@@ -63,7 +63,7 @@ public class SDLContext {
         return result
     }
 
-    func cleanup() {
+    public func cleanup() {
         //clean up sdl resources
         SDL_Quit()
 

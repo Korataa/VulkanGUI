@@ -26,22 +26,24 @@ layout(set = 1, binding = 0) uniform UIMaterial {
 layout(set = 1, binding = 1) uniform sampler2D uiTexture;
 
 void main() {
-    vec4 color = vertexColor;
+    vec4 vertexTint = vertexColor / 255.0;
+    vec4 materialTint = uiMaterial.tint / 255.0;
+    vec4 color = vertexTint;
 
     switch(uiMaterial.textureMode) {
         case 0: // Solid color only (use tint for text and rectangles)
-            color = uiMaterial.tint;
+            color = vertexTint * materialTint;
             break;
         case 1: // Texture only
-            color = texture(uiTexture, texCoords) * uiMaterial.tint;
+            color = texture(uiTexture, texCoords) * vertexTint * materialTint;
             break;
         case 2: // Texture * vertex color * tint
-            color = texture(uiTexture, texCoords) * vertexColor * uiMaterial.tint;
+            color = texture(uiTexture, texCoords) * vertexTint * materialTint;
             break;
         case 3: // SDF text rendering
             float sdf = texture(uiTexture, texCoords).r;
             float alpha = smoothstep(uiMaterial.sdfThreshold - uiMaterial.sdfRange, uiMaterial.sdfThreshold + uiMaterial.sdfRange, sdf);
-            color = uiMaterial.tint;
+            color = vertexTint * materialTint;
             color.a *= alpha;
             break;
     }

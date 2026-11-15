@@ -3,12 +3,11 @@ import Core
 import Math
 import Foundation
 
-/// ModelUI - UI models in screen space (mirrors Model3D architecture)
+/// ModelUI - UI models in screen space.
 /// Uses Vertex2D and 2D buffers but with screen-space coordinates
 public final class ModelUI {
     public var meshes: [Mesh2D] = []
     public var materials: [Material] = [] // Simple material system for UI
-    public var transform: Transform       // Screen-space transform (usually identity)
     
     /// Create ModelUI from Renderable2D elements
     public init(from renderables: [Renderable2D]) {
@@ -17,13 +16,6 @@ public final class ModelUI {
             guard renderable.isUploaded else { return nil }
             return Mesh2D(from: renderable)
         }
-        
-        // UI uses identity transform (already positioned in screen space)
-        self.transform = Transform(
-            position: Vector3(0, 0, 0),
-            rotation: Quaternion.identity(),
-            scale: Vector3(1, 1, 1)
-        )
         
         // UI typically uses simple materials
         self.materials = []

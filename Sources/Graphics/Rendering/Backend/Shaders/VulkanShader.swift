@@ -204,16 +204,6 @@ public class VulkanShader: Shader {
         materialBinding.update(material: material)
     }
     
-    public func setTransform(model: Matrix4x4, view: Matrix4x4, projection: Matrix4x4) {
-        // Note: Transform buffer upload should be handled externally
-        // Descriptor sets must be set up first via setupDescriptorSets(transformBuffer:)
-        if !descriptorSetsReady {
-            print("Warning: Descriptor sets not ready. Call setupDescriptorSets(transformBuffer:) first.")
-            return
-        }
-        // This method assumes descriptor sets were already set up with the buffer
-    }
-    
     public func updateTransform(transformBuffer: borrowing VulkanBuffer) {
         if descriptorSetsReady {
             updateTransformDescriptorSet(transformBuffer: transformBuffer)

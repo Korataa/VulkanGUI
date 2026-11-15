@@ -17,7 +17,6 @@ import Graphics
 //       addUIElement(uiElement)  // UIElement handles vertices/GPU upload
 //   }
 //
-// This matches the 3D approach: Models -> Graphics (not vertices -> Graphics)
 // Benefits: Clean separation, Graphics controls optimization, easier to extend
 
 // Layout system types
@@ -72,6 +71,8 @@ public struct Element {
     public var onHoverEnd: (() -> Void)? = nil
 
     public var isDirty: Bool = true
+    var dynamicContent: (() -> Element)?
+    var reactiveText: (() -> String)?
 
     public init(type: ElementType, bounds: Rectangle = Rectangle.zero, style: Style = Style(), children: [Element] = [], id: String? = nil) {
         self.elementType = type

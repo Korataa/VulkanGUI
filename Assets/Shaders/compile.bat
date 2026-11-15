@@ -3,8 +3,6 @@ setlocal
 
 echo Compiling Vulkan shaders...
 
-glslc shader.vert -o vert.spv || goto :error
-glslc shader.frag -o frag.spv || goto :error
 glslc shader2d.vert -o shader2d_vert.spv || goto :error
 glslc shader2d.frag -o shader2d_frag.spv || goto :error
 glslc ui.vert -o ui_vert.spv || goto :error

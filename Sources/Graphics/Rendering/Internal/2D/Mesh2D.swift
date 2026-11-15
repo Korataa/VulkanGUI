@@ -3,6 +3,24 @@ import Core
 import Foundation
 import Cvulkan
 
+public enum PrimitiveType {
+    case points
+    case lines
+    case lineStrip
+    case triangles
+    case triangleStrip
+
+    var vkTopology: VkPrimitiveTopology {
+        switch self {
+        case .points: return VK_PRIMITIVE_TOPOLOGY_POINT_LIST
+        case .lines: return VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+        case .lineStrip: return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP
+        case .triangles: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+        case .triangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+        }
+    }
+}
+
 /// Mesh2D - lightweight GPU draw descriptor for 2D elements (screen-space).
 ///
 /// Contract:

@@ -1,12 +1,15 @@
 // swift-tools-version: 6.0
 
 import PackageDescription
+import Foundation
 
 var unsafeIncludeFlags = [""]
 #if os(Windows)
     // Vulkan from SDK, SDL3 from vcpkg
-    let vulkanIncludePath = "C:\\VulkanSDK\\1.4.341.1\\Include"
-    let vcpkgIncludePath = "C:\\vcpkg\\installed\\x64-windows\\include"
+    let vulkanRoot = ProcessInfo.processInfo.environment["VULKAN_SDK"] ?? "C:\\VulkanSDK\\1.4.341.1"
+    let vcpkgRoot = ProcessInfo.processInfo.environment["VCPKG_ROOT"] ?? "C:\\vcpkg"
+    let vulkanIncludePath = "\(vulkanRoot)\\Include"
+    let vcpkgIncludePath = "\(vcpkgRoot)\\installed\\x64-windows\\include"
     unsafeIncludeFlags = ["-I\(vulkanIncludePath)", "-I\(vcpkgIncludePath)"]
 #else
     unsafeIncludeFlags = 
@@ -18,8 +21,8 @@ var unsafeIncludeFlags = [""]
 var unsafeLibFlags = [""]
 #if os(Windows)
     // SDL3 from vcpkg, Vulkan from SDK
-    let vulkanLibPath = "C:\\VulkanSDK\\1.4.341.1\\Lib"
-    let vcpkgLibPath = "C:\\vcpkg\\installed\\x64-windows\\lib"
+    let vulkanLibPath = "\(vulkanRoot)\\Lib"
+    let vcpkgLibPath = "\(vcpkgRoot)\\installed\\x64-windows\\lib"
     unsafeLibFlags = 
     [
         "-L\(vulkanLibPath)",
@@ -37,15 +40,15 @@ var unsafeLibFlags = [""]
 #endif
 
 let package = Package(
-    name: "DeckRPG",
+    name: "DeckRPGUI",
     products: [
-        .executable(
-            name: "DeckRPG",
-            targets: ["DeckRPG"]
+        .library(
+            name: "DeckRPGUI",
+            targets: ["DeckRPGUI"]
         ),
         .executable(
-            name: "Editor", 
-            targets: ["Editor"]
+            name: "GUIExample",
+            targets: ["GUIExample"]
         )
     ],
     targets: [
@@ -56,17 +59,6 @@ let package = Package(
         .systemLibrary(
             name: "Cvulkan",
             path: "Sources/ThirdParty/Cvulkan"
-        ),
-        .target(
-            name: "Cgltf",
-            dependencies: [],
-            path: "Sources/ThirdParty/Cgltf",
-            sources: ["cgltf.c", "cgltf.h"],
-            publicHeadersPath: ".",
-            cSettings: [
-                // Third-party library: silence CRT deprecation spam on Windows.
-                .define("_CRT_SECURE_NO_WARNINGS", .when(platforms: [.windows]))
-            ]
         ),
         .target(
             name: "Cstb_image",
@@ -111,17 +103,6 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Audio",
-            dependencies: ["Platform"],
-            path: "Sources/Audio",
-            cSettings: [
-                .unsafeFlags(unsafeIncludeFlags)
-            ],
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug))
-            ]
-        ),
-        .target(
             name: "Platform",
             dependencies: ["Core", "Math", "CSDL3", "Cvulkan"],
             path: "Sources/Platform",
@@ -142,7 +123,7 @@ let package = Package(
         ),
         .target(
             name: "Graphics",
-            dependencies: ["Core", "Math", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cgltf", "Cstb_image", "Cstb_truetype", "Logging"],
+            dependencies: ["Core", "Math", "Platform", "CSDL3", "Cvulkan", "Cvma", "Cstb_image", "Cstb_truetype", "Logging"],
             path: "Sources/Graphics",
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
@@ -155,9 +136,10 @@ let package = Package(
             ]
         ),
         .target(
-            name: "Assets",
-            dependencies: ["Core", "Math", "Graphics", "Cgltf", "Cstb_image"],
-            path: "Sources/Assets",
+            name: "UI",
+            dependencies: ["Core", "Math", "Graphics", "Cstb_truetype", "Cstb_image", "Logging"],
+            path: "Sources/UI",
+            exclude: ["README.md"],
             cSettings: [
                 .unsafeFlags(unsafeIncludeFlags)
             ],
@@ -166,35 +148,23 @@ let package = Package(
             ]
         ),
         .target(
-            name: "UI",
-            dependencies: ["Core", "Math", "Graphics", "Cstb_truetype", "Cstb_image", "Logging"],
-            path: "Sources/UI",
-            cSettings: [
-                .unsafeFlags(unsafeIncludeFlags)
-            ],
+            name: "DeckRPGUI",
+            dependencies: ["Core", "Math", "Platform", "Graphics", "UI", "Logging"],
+            path: "Sources/DeckRPGUI",
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug))
             ]
         ),
-
         .executableTarget(
-            name: "DeckRPG",
-            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI", "Logging"],
-            path: "Sources/GameRuntime",
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug))
-            ]
+            name: "GUIExample",
+            dependencies: ["DeckRPGUI"],
+            path: "Examples/GUIExample"
         ),
-
-        .executableTarget(
-            name: "Editor",
-            dependencies: ["Core", "Math", "Platform", "Audio", "Graphics", "Assets", "UI", "Logging"],
-            path: "Sources/EditorRuntime",
-            swiftSettings: [
-                .define("DEBUG", .when(configuration: .debug))
-            ]
+        .testTarget(
+            name: "GraphicsTests",
+            dependencies: ["DeckRPGUI", "Graphics", "Core", "UI", "Platform", "CSDL3", "Cvulkan", "Cvma"],
+            path: "Tests/GraphicsTests"
         )
-
     ],
     cxxLanguageStandard: .cxx17
 )

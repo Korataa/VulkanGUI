@@ -15,7 +15,14 @@ import Foundation
 public class Renderable2D {
     public var position: SIMD2<Float>
     public var size: SIMD2<Float>
-    public var color: Color
+    public var color: Color {
+        didSet {
+            for index in vertices.indices {
+                vertices[index].color = color
+            }
+            markDirty()
+        }
+    }
     public var textureID: UInt32?
     public var usesSDF: Bool
     public var sdfThreshold: Float

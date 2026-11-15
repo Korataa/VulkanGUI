@@ -47,13 +47,13 @@ float computeScreenPxRange(vec2 uv, float pxRange) {
 
 void main() {
     vec4 sampleValue = texture(uiTexture, texCoords);
-    float distance = median3(sampleValue.rgb);
+    float distance = uiMaterial.reserved2 > 0.5 ? median3(sampleValue.rgb) : sampleValue.r;
 
     // Compute screen-space pixel range for SDF smoothing; ensure a reasonable minimum
     float pxRange = computeScreenPxRange(texCoords, uiMaterial.sdfRange);
     pxRange = max(pxRange, 4.0);
 
-    float edge = 0.5;
+    float edge = uiMaterial.sdfThreshold;
     float sharpness = clamp(pxRange * 0.25, 0.0, 0.1);
 
     // Fill and outline
@@ -66,7 +66,8 @@ void main() {
 
     // Drop shadow effect
     vec2 shadowUV = texCoords + uiMaterial.shadowOffset;
-    float shadowDist = median3(texture(uiTexture, shadowUV).rgb);
+    vec4 shadowSample = texture(uiTexture, shadowUV);
+    float shadowDist = uiMaterial.reserved2 > 0.5 ? median3(shadowSample.rgb) : shadowSample.r;
     float shadowPxRange = computeScreenPxRange(shadowUV, uiMaterial.sdfRange);
     float shadowAlpha = clamp(shadowPxRange * (shadowDist - (edge - sharpness)) + 0.5, 0.0, 1.0);
 

@@ -7,7 +7,6 @@ import Foundation
 
 // Mock enums to test pipeline creation
 enum PipelineType {
-    case Graphics3D
     case Graphics2D
     case UI
     case PostProcessing
@@ -143,21 +142,6 @@ func testPipelineArchitecture() {
     // Create pipeline manager
     let pipelineManager = PipelineManager(backend: .Vulkan)
     
-    // Test 3D pipeline creation
-    print("\n--- Testing 3D Graphics Pipeline ---")
-    let descriptor3D = PipelineDescriptor(
-        type: .Graphics3D,
-        vertexShader: "vert.spv",
-        fragmentShader: "frag.spv",
-        blendMode: .None,
-        depthTest: true,
-        cullMode: .Back
-    )
-    
-    let pipeline3D = pipelineManager.createOrGetPipeline(desc: descriptor3D)
-    pipeline3D.bind()
-    pipeline3D.unbind()
-    
     // Test UI pipeline creation
     print("\n--- Testing UI Pipeline ---")
     let descriptorUI = PipelineDescriptor(
@@ -175,7 +159,7 @@ func testPipelineArchitecture() {
     
     // Test pipeline caching
     print("\n--- Testing Pipeline Caching ---")
-    let pipeline3D_cached = pipelineManager.createOrGetPipeline(desc: descriptor3D)
+    _ = pipelineManager.createOrGetPipeline(desc: descriptorUI)
     // Should reuse existing pipeline
     
     // Test 2D pipeline
@@ -194,11 +178,6 @@ func testPipelineArchitecture() {
     
     // Simulate render loop switching between pipelines
     print("\n--- Simulating Render Loop ---")
-    print("Frame 1: 3D content")
-    pipeline3D.bind()
-    // ... render 3D models ...
-    pipeline3D.unbind()
-    
     print("Frame 1: UI overlay")
     pipelineUI.bind()
     // ... render UI ...

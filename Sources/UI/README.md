@@ -1,9 +1,7 @@
-UI module structure
+# UI module
 
-- `ScreenManager.swift` — top-level screen push/pop manager
-- `Screens/` — place for concrete screen implementations (MainMenu, HUD, Settings)
-- `Components/` — reusable UI components (Button, Label, Panel)
-- `Diegetic/` — helpers for world-space UI widgets
-- `Core/` — current UI core helpers (existing files moved here)
+The UI module provides elements, layout containers, input handling, and text
+rendering through `UIManager`. It uses the Graphics, Core, and Math modules.
+`ScreenManager` provides screen push/pop handling.
 
-Keep UI code dependent only on `CoreAPI` protocol types. Runtime will inject concrete implementations.
+See the [package README](../../README.md) for setup and an example.

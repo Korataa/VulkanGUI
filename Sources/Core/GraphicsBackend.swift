@@ -1,6 +1,6 @@
 import Foundation
 
-// Graphics API enum - defined in Core so Camera and other core types can reference it
+// Graphics API enum shared by the rendering modules.
 public enum GraphicsBackend {
     case Vulkan
     case Metal

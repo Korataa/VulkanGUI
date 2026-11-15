@@ -21,6 +21,9 @@ public class Window {
             Int32(height), 
             flags
         )
+        guard windowHandle != nil else {
+            fatalError("Failed to create SDL window: \(String(cString: SDL_GetError()))")
+        }
 
         self.width = width
         self.height = height
@@ -30,8 +33,11 @@ public class Window {
         sdlContext.setWindowRelativeMouseMode(false)
     }
 
-    func cleanup() {
-        //clean up sdl resources
-        SDL_Quit()
+    public func cleanup() {
+        if let windowHandle {
+            SDL_DestroyWindow(windowHandle)
+            self.windowHandle = nil
+            sdlContext.setWindowHandle(sdlWindow: nil)
+        }
     }
 }
